@@ -1,0 +1,214 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #C8102E;
+  --font-sans: 'Sora', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+/* ── Hero ──────────────────────────────────────────────────── */
+.hero-section {
+  position: relative;
+  height: 520px;
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  overflow: hidden;
+}
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    to right,
+    rgba(0,0,0,0.80) 0%,
+    rgba(0,0,0,0.52) 55%,
+    rgba(0,0,0,0.18) 100%
+  );
+}
+.hero-abs {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+}
+/* Two-column grid: text left, panel right */
+.hero-inner {
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 0 48px;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  align-items: center;
+  gap: 48px;
+}
+.hero-headline {
+  font-size: 44px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  margin: 0 0 16px 0;
+}
+
+/* Hide panel column on narrow viewports */
+@media (max-width: 960px) {
+  .hero-inner {
+    grid-template-columns: 1fr;
+  }
+  .hero-panel-col {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .hero-section {
+    height: auto;
+    min-height: 460px;
+  }
+  .hero-inner {
+    padding: 48px 20px 56px;
+    align-items: flex-start;
+  }
+  .hero-headline {
+    font-size: 30px;
+  }
+}
+
+/* ── Trust bar ─────────────────────────────────────────────── */
+.trust-bar-items {
+  max-width: 1152px;
+  margin: 0 auto;
+  display: flex;
+  gap: 32px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ── How it works ──────────────────────────────────────────── */
+.hiw-outer {
+  display: grid;
+  grid-template-columns: 45fr 55fr;
+  gap: 56px;
+  align-items: start;
+}
+.hiw-right {
+  position: sticky;
+  top: 80px;
+}
+.hiw-image-panel {
+  height: 520px;
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
+  background: #E8EDF5;
+}
+.hiw-step {
+  padding: 16px 16px 16px 0;
+  border-radius: 8px;
+  cursor: default;
+  transition: background 0.2s ease;
+}
+.hiw-step.active {
+  background: #F6F6F4;
+  padding-left: 16px;
+}
+.hiw-step-circle {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 1.5px solid #E8E8E5;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; color: #767676;
+  flex-shrink: 0; transition: all 0.2s ease;
+}
+.hiw-step-circle.active {
+  background: #C8102E; border-color: #C8102E; color: white;
+}
+.hiw-step-title {
+  font-size: 14px; font-weight: 600; color: rgba(43,47,54,0.5);
+  margin: 0 0 6px 0; transition: color 0.2s ease;
+}
+.hiw-step-title.active { color: #2B2F36; }
+.hiw-step-desc {
+  font-size: 13px; color: #767676; line-height: 1.65; margin: 0;
+}
+.hiw-step-icon-mobile { display: none; margin-bottom: 8px; }
+.hiw-image {
+  position: absolute; inset: 0;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.hiw-image.active { opacity: 1; }
+.hiw-image-label {
+  position: absolute; bottom: 20px; left: 20px; z-index: 3;
+}
+
+@media (max-width: 900px) {
+  .hiw-outer { grid-template-columns: 1fr; gap: 32px; }
+  .hiw-right { position: static; display: none; }
+  .hiw-step-icon-mobile { display: block; }
+}
+
+/* ── CTA buttons ───────────────────────────────────────────── */
+.cta-buttons {
+  display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+}
+
+/* ── Footer ────────────────────────────────────────────────── */
+.footer-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 48px;
+}
+.footer-bottom {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+}
+@media (max-width: 900px) {
+  .footer-grid { grid-template-columns: 1fr 1fr; gap: 32px; }
+}
+@media (max-width: 600px) {
+  .footer-grid { grid-template-columns: 1fr; }
+  .footer-bottom { flex-direction: column; align-items: flex-start; }
+}
+
+/* ── Hero panel column — hidden on narrow viewports ───────── */
+.hero-panel-col { display: flex; }
+@media (max-width: 768px) {
+  .hero-panel-col { display: none; }
+  .hero-section-grid {
+    grid-template-columns: 1fr !important;
+    padding: 36px 24px !important;
+  }
+}
+
+/* ── How it works mobile ───────────────────────────────────── */
+@media (max-width: 768px) {
+  .hiw-right-col { display: none !important; }
+  .hiw-outer-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ── Impact section mobile ─────────────────────────────────── */
+@media (max-width: 768px) {
+  .impact-grid { grid-template-columns: 1fr !important; }
+  .impact-photo { min-height: 200px !important; }
+}
+
+/* ── Footer mobile ─────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 28px !important; }
+}
+@media (max-width: 560px) {
+  .footer-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ── Nav ───────────────────────────────────────────────────── */
+.nav-links { display: flex; align-items: center; }
+@media (max-width: 767px) { .nav-links { display: none; } }
+
+/* ── Progress bar (onboarding) ─────────────────────────────── */
+@media (max-width: 600px) {
+  .progress-line { display: none !important; }
+  .summary-row { grid-template-columns: 1fr !important; gap: 2px !important; }
+}
