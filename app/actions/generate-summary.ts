@@ -80,7 +80,7 @@ export async function generateCampaignSummary(campaignId: string): Promise<{
   const system = `You are a campaign assistant. Based ONLY on the campaign platform document provided, generate a very concise summary.
 
 Strict rules:
-- Intro: exactly 2 sentences, maximum 35 words total. Warm and direct tone.
+- Intro: exactly 2 sentences, maximum 30 words total, maximum 160 characters.
 - Proposals: exactly 3. Each title maximum 4 words. Each description exactly 1 sentence, maximum 18 words. Use specific numbers from the document when available.
 - Never invent or assume anything not explicitly stated in the document.
 

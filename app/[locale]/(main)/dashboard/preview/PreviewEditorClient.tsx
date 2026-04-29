@@ -15,7 +15,8 @@ interface Campaign {
   page_show_scorecards?: boolean;
   page_show_chatbot?: boolean;
   page_intro_override?: string;
-  ai_summary?: { intro?: string } | null;
+  ai_summary?: { intro?: string; proposals?: { title: string; description: string }[] } | null;
+  proposal_overrides?: { title: string; description: string }[];
   campaign_platform_url?: string;
   banner_phrase?: string;
   race_type?: string;
@@ -52,10 +53,19 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
   // Tab state
   const [activeTab, setActiveTab] = useState<'appearance' | 'content'>('appearance');
 
+  // Proposals state
+  const [proposals, setProposals] = useState<{ title: string; description: string }[]>(
+    (campaign as Campaign & { proposal_overrides?: { title: string; description: string }[] }).proposal_overrides ??
+    (campaign.ai_summary as { proposals?: { title: string; description: string }[] } | null)?.proposals ??
+    [{ title: '', description: '' }, { title: '', description: '' }, { title: '', description: '' }]
+  );
+
   // Banner state
   const [bannerPhrase, setBannerPhrase] = useState(campaign.banner_phrase ?? '');
   const [bannerPhraseLoading, setBannerPhraseLoading] = useState(false);
   const [bannerMode, setBannerMode] = useState<'generate' | 'upload'>('generate');
+  const [bannerApplying, setBannerApplying] = useState(false);
+  const [bannerConfirm, setBannerConfirm] = useState('');
 
   // Share popover state
   const [shareOpen, setShareOpen] = useState(false);
@@ -129,6 +139,7 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
       page_show_chatbot: showChatbot,
       page_intro_override: introText || null,
       campaign_platform_url: pdfUrl || null,
+      proposal_overrides: proposals,
     };
     if (bannerMode === 'generate' && bannerPhrase) {
       updateData.banner_phrase = bannerPhrase;
@@ -199,6 +210,16 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
     const sb = createBrowserSupabaseClient();
     await sb.from('campaigns').update({ banner_phrase: bannerPhrase, banner_type: 'generated' }).eq('id', campaign.id);
     setIframeKey(k => k + 1);
+  }
+
+  async function handleApplyBanner() {
+    setBannerApplying(true);
+    const sb = createBrowserSupabaseClient();
+    await sb.from('campaigns').update({ banner_phrase: bannerPhrase, banner_type: 'generated' }).eq('id', campaign.id);
+    setBannerApplying(false);
+    setBannerConfirm('✓ Banner updated — live on your donation link.');
+    setIframeKey(k => k + 1);
+    setTimeout(() => setBannerConfirm(''), 3000);
   }
 
   function handleCopyLink() {
@@ -281,7 +302,7 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
           </div>
 
           {/* Editor panel */}
-          <div style={{ background: 'white', border: '0.5px solid #E8E8E5', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ background: 'white', border: '0.5px solid #E8E8E5', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'sticky', top: 24, maxHeight: 'calc(100vh - 48px)', overflowY: 'auto' }}>
 
             {/* Tab header */}
             <div style={{ display: 'flex', borderBottom: '0.5px solid #E8E8E5' }}>
@@ -355,12 +376,22 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
                             {bannerPhraseLoading ? 'Generating…' : bannerPhrase || 'Your slogan here'}
                           </span>
                         </div>
-                        <button
-                          onClick={handleSaveBanner}
-                          style={{ width: '100%', height: 30, background: '#2B2F36', color: 'white', fontSize: 11, borderRadius: 4, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
-                        >
-                          Generate banner
-                        </button>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                          <button
+                            onClick={() => setIframeKey(k => k + 1)}
+                            style={{ flex: 1, height: 30, border: '0.5px solid #E8E8E5', background: 'white', color: '#2B2F36', fontSize: 11, fontWeight: 500, borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit' }}
+                          >
+                            Preview
+                          </button>
+                          <button
+                            onClick={handleApplyBanner}
+                            disabled={bannerApplying || !bannerPhrase}
+                            style={{ flex: 1, height: 30, background: '#2B2F36', color: 'white', border: 'none', fontSize: 11, fontWeight: 500, borderRadius: 4, cursor: bannerApplying ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                          >
+                            {bannerApplying ? 'Saving…' : 'Use this banner'}
+                          </button>
+                        </div>
+                        {bannerConfirm && <p style={{ fontSize: 10, color: '#16A34A', marginTop: 4, fontFamily: 'inherit' }}>{bannerConfirm}</p>}
                       </>
                     ) : (
                       <label style={{ display: 'block', border: '1.5px dashed #E8E8E5', borderRadius: 6, padding: 12, textAlign: 'center', cursor: 'pointer' }}>
@@ -442,6 +473,34 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
                     {!campaign.campaign_platform_url && !pdfUrl && (
                       <p style={{ fontSize: 10, color: '#767676', marginTop: 4, fontFamily: 'inherit' }}>Upload a PDF below first.</p>
                     )}
+                  </div>
+
+                  {/* Proposals */}
+                  <div>
+                    <span style={sectionLabel}>Top 3 proposals</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                      {proposals.map((p, i) => (
+                        <div key={i} style={{ padding: '8px 0', borderBottom: i < 2 ? '0.5px solid #E8E8E5' : 'none' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <div style={{ width: 14, height: 14, borderRadius: '50%', background: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <span style={{ fontSize: 7, fontWeight: 700, color: 'white' }}>{i + 1}</span>
+                            </div>
+                            <input
+                              value={p.title}
+                              onChange={e => setProposals(ps => ps.map((x, j) => j === i ? { ...x, title: e.target.value } : x))}
+                              placeholder={`Proposal ${i + 1} title`}
+                              style={{ flex: 1, height: 26, border: '0.5px solid #E8E8E5', borderRadius: 4, padding: '0 7px', fontSize: 10, fontWeight: 600, color: '#2B2F36', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                          <input
+                            value={p.description}
+                            onChange={e => setProposals(ps => ps.map((x, j) => j === i ? { ...x, description: e.target.value } : x))}
+                            placeholder="Short description…"
+                            style={{ width: 'calc(100% - 20px)', marginLeft: 20, height: 26, border: '0.5px solid #E8E8E5', borderRadius: 4, padding: '0 7px', fontSize: 10, color: '#767676', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   {/* PDF */}

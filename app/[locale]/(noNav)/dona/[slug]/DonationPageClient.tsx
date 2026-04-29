@@ -69,6 +69,7 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
   const [customAmount, setCustomAmount] = useState('');
   const [formVisible, setFormVisible] = useState(false);
   const [photoErr, setPhotoErr] = useState(false);
+  const [introExpanded, setIntroExpanded] = useState(false);
 
   // Form state
   const [name, setName] = useState('');
@@ -195,7 +196,17 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
 
             {/* Intro */}
             <div style={{ background: lightBg, borderLeft: `2px solid ${primary}`, borderRadius: 6, padding: '10px 12px', marginBottom: 12 }}>
-              <p style={{ fontSize: 12, color: '#2B2F36', lineHeight: 1.7, margin: 0 }}>{intro}</p>
+              <p style={{ fontSize: 12, color: '#2B2F36', lineHeight: 1.7, margin: 0 }}>
+                {intro.length <= 180 || introExpanded ? intro : `${intro.slice(0, 180)}... `}
+                {intro.length > 180 && (
+                  <span
+                    onClick={() => setIntroExpanded(e => !e)}
+                    style={{ color: accent, fontWeight: 500, cursor: 'pointer', textDecoration: 'none', fontSize: 12 }}
+                  >
+                    {introExpanded ? 'Read less' : 'Read more'}
+                  </span>
+                )}
+              </p>
             </div>
 
             {/* Proposals */}
@@ -394,11 +405,22 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
               </div>
             </div>
 
-            {/* Footer */}
-            <div style={{ borderTop: '0.5px solid #E8E8E5', padding: 10, textAlign: 'center', fontSize: 10, color: '#767676', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-              Powered by Impulso · Secure, transparent fundraising for Dominican candidates
-            </div>
           </div>
+        </div>
+
+        {/* Impulso footer — outside the grid, truly at the bottom */}
+        <div style={{ borderTop: '0.5px solid #E8E8E5', padding: '10px 16px', textAlign: 'center', maxWidth: 960, margin: '0 auto', background: 'white' }}>
+          <a href="https://impulso.do" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, textDecoration: 'none', color: '#BBBBBB' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#767676')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#BBBBBB')}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="20" height="18" rx="2"/>
+              <path d="M8 10h8M8 14h5"/>
+              <circle cx="17" cy="14" r="2.5" fill="currentColor" stroke="none"/>
+            </svg>
+            <span style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.04em', fontFamily: "'Sora', sans-serif" }}>impulso</span>
+          </a>
         </div>
       </div>
 
