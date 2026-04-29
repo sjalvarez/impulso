@@ -350,53 +350,58 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
           </div>
         )}
 
-        {/* Back button */}
-        <button
-          onClick={() => router.push('/dashboard')}
-          style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#767676', fontFamily: 'inherit', padding: 0, marginBottom: 20 }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#767676" strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-          Back to dashboard
-        </button>
+        {/* Header bar */}
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
+          <button
+            onClick={() => router.push('/dashboard')}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#767676', fontFamily: 'inherit', padding: 0, flexShrink: 0 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#767676" strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+            Back to dashboard
+          </button>
+
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#16A34A', flexShrink: 0 }} />
+            <span style={{ fontSize: 11, color: '#767676', fontFamily: 'inherit' }}>Live preview</span>
+          </div>
+
+          <div ref={shareRef} style={{ position: 'relative', flexShrink: 0 }}>
+            <button
+              onClick={() => setShareOpen(o => !o)}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#2B2F36', color: 'white', border: 'none', borderRadius: 6, padding: '8px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Share donation link
+            </button>
+            {shareOpen && (
+              <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, background: 'white', border: '0.5px solid #E8E8E5', borderRadius: 8, padding: 14, width: 280, boxShadow: '0 4px 16px rgba(0,0,0,0.1)', zIndex: 50 }}>
+                <p style={{ fontSize: 10, color: '#767676', margin: '0 0 8px', fontFamily: 'inherit' }}>Donation page URL</p>
+                <div style={{ background: '#F6F6F4', borderRadius: 4, padding: '6px 10px', fontSize: 10, color: '#2B2F36', fontFamily: 'monospace', wordBreak: 'break-all', marginBottom: 10 }}>
+                  impulso.do/dona/{campaign.slug}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={handleCopyLink}
+                    style={{ flex: 1, height: 30, background: '#2B2F36', color: 'white', border: 'none', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    {copied ? 'Copied ✓' : 'Copy link'}
+                  </button>
+                  <button
+                    onClick={() => window.open(`https://wa.me/?text=Apoya mi campaña: ${donationUrl}`, '_blank')}
+                    style={{ flex: 1, height: 30, background: '#25D366', color: 'white', border: 'none', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    WhatsApp
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
 
         <div className="preview-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16, alignItems: 'start' }}>
 
-          {/* Live preview */}
+          {/* Live preview iframe */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <p style={{ fontSize: 10, textTransform: 'uppercase', color: '#767676', letterSpacing: '0.07em', margin: 0, fontFamily: 'inherit' }}>Live preview</p>
-              {/* Share popover */}
-              <div ref={shareRef} style={{ position: 'relative' }}>
-                <button
-                  onClick={() => setShareOpen(o => !o)}
-                  style={{ background: 'none', border: '0.5px solid #E8E8E5', borderRadius: 4, padding: '4px 10px', fontSize: 11, color: '#2B2F36', cursor: 'pointer', fontFamily: 'inherit' }}
-                >
-                  Share donation link
-                </button>
-                {shareOpen && (
-                  <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, background: 'white', border: '0.5px solid #E8E8E5', borderRadius: 8, padding: 14, width: 280, boxShadow: '0 4px 16px rgba(0,0,0,0.1)', zIndex: 50 }}>
-                    <p style={{ fontSize: 10, color: '#767676', margin: '0 0 8px', fontFamily: 'inherit' }}>Donation page URL</p>
-                    <div style={{ background: '#F6F6F4', borderRadius: 4, padding: '6px 10px', fontSize: 10, color: '#2B2F36', fontFamily: 'monospace', wordBreak: 'break-all', marginBottom: 10 }}>
-                      impulso.do/dona/{campaign.slug}
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        onClick={handleCopyLink}
-                        style={{ flex: 1, height: 30, background: '#2B2F36', color: 'white', border: 'none', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}
-                      >
-                        {copied ? 'Copied ✓' : 'Copy link'}
-                      </button>
-                      <button
-                        onClick={() => window.open(`https://wa.me/?text=Apoya mi campaña: ${donationUrl}`, '_blank')}
-                        style={{ flex: 1, height: 30, background: '#25D366', color: 'white', border: 'none', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}
-                      >
-                        WhatsApp
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
             <div style={{ border: '0.5px solid #E8E8E5', borderRadius: 12, overflow: 'hidden', height: 600 }}>
               <iframe
                 key={iframeKey}
