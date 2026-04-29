@@ -4,6 +4,29 @@ import Image from 'next/image';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { useRouter } from '@/lib/i18n/navigation';
 
+function renderChatMessage(text: string): React.ReactNode {
+  function applyBold(line: string): React.ReactNode {
+    const parts = line.split(/\*\*(.*?)\*\*/g);
+    return parts.map((part, i) => i % 2 === 1 ? <strong key={i}>{part}</strong> : part);
+  }
+  const lines = text.split('\n').map(l => l.trimEnd()).filter((l, i, arr) => l || arr[i - 1]);
+  const out: React.ReactNode[] = [];
+  let bullets: string[] = [];
+  function flush() {
+    if (!bullets.length) return;
+    out.push(<ul key={out.length} style={{ margin: '3px 0', paddingLeft: 13, listStyle: 'disc' }}>{bullets.map((b, i) => <li key={i} style={{ marginBottom: 1 }}>{applyBold(b)}</li>)}</ul>);
+    bullets = [];
+  }
+  for (const line of lines) {
+    const t = line.trim();
+    if (t.startsWith('- ') || t.startsWith('* ')) { bullets.push(t.slice(2)); continue; }
+    flush();
+    if (t) out.push(<p key={out.length} style={{ margin: '0 0 3px' }}>{applyBold(t)}</p>);
+  }
+  flush();
+  return out;
+}
+
 interface Campaign {
   id: string;
   candidate_name: string;
@@ -464,7 +487,7 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
                       borderRadius: m.role === 'user' ? '9px 2px 9px 9px' : '2px 9px 9px 9px',
                       fontSize: 10, padding: '6px 9px', lineHeight: 1.5,
                     }}>
-                      {m.text}
+                      {m.role === 'bot' ? renderChatMessage(m.text) : m.text}
                     </div>
                   </div>
                 ))}
