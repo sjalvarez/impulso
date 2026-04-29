@@ -230,9 +230,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
           .action-grid { grid-template-columns: 1fr !important; }
           .link-row { flex-wrap: wrap !important; }
         }
-        @media (max-width: 1024px) and (min-width: 769px) {
-          .action-grid { grid-template-columns: repeat(2, 1fr) !important; }
-        }
       `}</style>
 
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 32px', background: 'white' }}>
@@ -309,7 +306,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         </div>
 
         {/* ── Action cards ───────────────────────────────────── */}
-        <div className="action-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        <div className="action-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, maxWidth: 740, margin: '0 auto' }}>
 
           {/* Card 1 — Analytics */}
           <ActionCard
@@ -319,12 +316,18 @@ export default function DashboardClient({ userId }: { userId: string }) {
             description="Track every donation in real time. See who's giving, how much, and export JCE-ready reports."
             teaser={
               <div style={{ background: '#F6F6F4', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
-                <p style={{ fontSize: 20, fontWeight: 600, color: '#2B2F36', letterSpacing: '-0.03em', margin: 0, fontFamily: 'inherit' }}>
-                  RD${totalRaised.toLocaleString('es-DO')}
-                </p>
-                <p style={{ fontSize: 11, color: '#767676', margin: '1px 0 0', fontFamily: 'inherit' }}>
-                  {donorCount === 0 ? 'No donations yet — share your link to get started' : `raised · ${donorCount} donor${donorCount !== 1 ? 's' : ''} so far`}
-                </p>
+                {donorCount === 0 ? (
+                  <p style={{ fontSize: 13, fontWeight: 500, color: '#767676', margin: 0, fontFamily: 'inherit' }}>No donations yet — share your link.</p>
+                ) : (
+                  <>
+                    <p style={{ fontSize: 20, fontWeight: 600, color: '#2B2F36', letterSpacing: '-0.03em', margin: 0, fontFamily: 'inherit' }}>
+                      RD${totalRaised.toLocaleString('es-DO')}
+                    </p>
+                    <p style={{ fontSize: 11, color: '#767676', margin: '1px 0 0', fontFamily: 'inherit' }}>
+                      {donorCount} donor{donorCount !== 1 ? 's' : ''} so far
+                    </p>
+                  </>
+                )}
               </div>
             }
             buttonBg="#185FA5"
@@ -332,12 +335,12 @@ export default function DashboardClient({ userId }: { userId: string }) {
             onButtonClick={() => router.push('/dashboard/analytics')}
           />
 
-          {/* Card 2 — Preview */}
+          {/* Card 2 — Preview & edit */}
           <ActionCard
             iconBg="#EEEDFE"
             icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#534AB7" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>}
-            title="Preview donation page"
-            description="See exactly what donors see when they visit your link. Make sure everything looks right before sharing."
+            title="Preview & edit"
+            description="Customize your donation page — edit your proposals, colors, and banner. Preview exactly what donors see."
             teaser={
               <div style={{ background: '#F6F6F4', borderRadius: 6, height: 64, marginBottom: 14, border: '0.5px solid #E8E8E5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 4 }}>
                 <div style={{ width: 80, height: 3, background: '#C8102E', borderRadius: 2 }} />
@@ -346,25 +349,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
               </div>
             }
             buttonBg="#534AB7"
-            buttonText="Preview page →"
+            buttonText="Preview & edit →"
             onButtonClick={() => router.push('/dashboard/preview')}
-          />
-
-          {/* Card 3 — Outreach */}
-          <ActionCard
-            iconBg="#DCFCE7"
-            icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="1.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>}
-            title="AI outreach campaign"
-            description="Upload your contact list and let AI generate personalized fundraising emails and call scripts — ready for your team to send and use."
-            teaser={
-              <div style={{ background: '#F6F6F4', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
-                <p style={{ fontSize: 13, fontWeight: 500, color: '#767676', margin: 0, fontFamily: 'inherit' }}>Email campaigns · AI call scripts</p>
-                <p style={{ fontSize: 11, color: '#767676', margin: '1px 0 0', fontFamily: 'inherit' }}>Powered by Claude AI</p>
-              </div>
-            }
-            buttonBg="#166634"
-            buttonText="Start outreach →"
-            onButtonClick={() => router.push('/outreach')}
           />
         </div>
 
