@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from '@/lib/i18n/navigation';
 import Image from 'next/image';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
@@ -21,9 +21,6 @@ interface Campaign {
   candidate_photo_url?: string;
 }
 
-interface Donation {
-  amount: number;
-}
 
 const RACE_LABELS: Record<string, string> = {
   president: 'President (Presidente/a)',
@@ -142,25 +139,9 @@ function ActionCard({ iconBg, icon, title, description, teaser, buttonBg, button
   );
 }
 
-export default function DashboardClient({ userId }: { userId: string }) {
+export default function DashboardClient({ userId, campaign, totalRaised, donorCount }: { userId: string; campaign: Campaign; totalRaised: number; donorCount: number }) {
   const router = useRouter();
-  const [campaign, setCampaign] = useState<Campaign | null>(null);
-  const [donations, setDonations] = useState<Donation[]>([]);
-  const [loading, setLoading] = useState(true);
   const [copyLabel, setCopyLabel] = useState('Copy link');
-
-  useEffect(() => {
-    async function load() {
-      const sb = createBrowserSupabaseClient();
-      const { data: camp } = await sb.from('campaigns').select('*').eq('user_id', userId).single();
-      if (!camp) { router.push('/onboarding'); return; }
-      setCampaign(camp);
-      const { data: dons } = await sb.from('donations').select('amount').eq('campaign_id', camp.id);
-      setDonations(dons ?? []);
-      setLoading(false);
-    }
-    load();
-  }, [userId, router]);
 
   async function handleSignOut() {
     const sb = createBrowserSupabaseClient();
@@ -175,18 +156,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
     setTimeout(() => setCopyLabel('Copy link'), 2000);
   }
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-        <p style={{ fontSize: 13, color: '#767676' }}>Loading your dashboard…</p>
-      </div>
-    );
-  }
-
-  if (!campaign) return null;
-
-  const totalRaised = donations.reduce((s, d) => s + (d.amount ?? 0), 0);
-  const donorCount = donations.length;
   const daysToElection = daysUntil(campaign.election_deadline);
   const daysToFundraising = daysUntil(campaign.fundraising_deadline);
   const donationLink = `impulso.do/dona/${campaign.slug}`;
@@ -332,18 +301,13 @@ export default function DashboardClient({ userId }: { userId: string }) {
           <ActionCard
             iconBg="#EEEDFE"
             icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#534AB7" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>}
-            title="Preview & edit"
+            title="Preview & edit your donation page"
             description="Customize your donation page — edit your proposals, colors, and banner. Preview exactly what donors see."
             teaser={
-              <div style={{ background: '#F6F6F4', borderRadius: 6, height: 64, marginBottom: 14, border: '0.5px solid #E8E8E5', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '0 16px' }}>
+              <div style={{ background: '#F6F6F4', borderRadius: 6, height: 64, marginBottom: 14, border: '0.5px solid #E8E8E5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: 16, fontWeight: 700, color: '#2B2F36', margin: 0, letterSpacing: '-0.02em', fontFamily: 'inherit' }}>{donorCount}</p>
-                  <p style={{ fontSize: 9, color: '#767676', margin: 0, fontFamily: 'inherit' }}>donors so far</p>
-                </div>
-                <div style={{ width: 1, height: 28, background: '#E8E8E5' }} />
-                <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: 16, fontWeight: 700, color: '#2B2F36', margin: 0, letterSpacing: '-0.02em', fontFamily: 'inherit' }}>{daysToFundraising ?? '—'}</p>
-                  <p style={{ fontSize: 9, color: '#767676', margin: 0, fontFamily: 'inherit' }}>days left</p>
+                  <p style={{ fontSize: 22, fontWeight: 700, color: '#2B2F36', margin: 0, letterSpacing: '-0.03em', fontFamily: 'inherit' }}>{daysToFundraising ?? '—'}</p>
+                  <p style={{ fontSize: 9, color: '#767676', margin: 0, fontFamily: 'inherit' }}>days left to raise funds</p>
                 </div>
               </div>
             }
