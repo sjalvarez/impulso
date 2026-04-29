@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request: NextRequest) {
   const { message, campaignId } = await request.json();
 
-  const sb = await createServerSupabaseClient();
+  // Use service role so unauthenticated visitors (donors) can still use the chatbot
+  const sb = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
   const { data: campaign } = await sb.from('campaigns').select('candidate_name, whatsapp, campaign_platform_url').eq('id', campaignId).single();
 
   if (!campaign?.campaign_platform_url) {
