@@ -1,310 +1,383 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from '@/lib/i18n/navigation';
+import Image from 'next/image';
+import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
+import { JCE_PARTIES } from '@/lib/jce-parties';
 
-interface Props {
-  campaign: any;
-  donations: any[];
-  locale: string;
+interface Campaign {
+  id: string;
+  candidate_name: string;
+  campaign_name?: string;
+  slug: string;
+  status: string;
+  party_affiliation?: string;
+  race_type?: string;
+  election_type?: string;
+  election_date_type?: string;
+  election_deadline?: string;
+  fundraising_deadline?: string;
+  candidate_photo_url?: string;
 }
 
-export default function DashboardClient({ campaign, donations, locale }: Props) {
+interface Donation {
+  id: string;
+  amount: number;
+  created_at: string;
+}
+
+const RACE_LABELS: Record<string, string> = {
+  president: 'President (Presidente/a)',
+  senator: 'Senator (Senador/a)',
+  deputy: 'Deputy (Diputado/a)',
+  mayor: 'Mayor (Alcalde/a)',
+  district_director: 'District Director (Director/a Distrital)',
+};
+
+const ELECTION_TYPE_LABELS: Record<string, string> = {
+  primary: 'Primary',
+  municipal: 'Municipal election',
+  general: 'General election',
+};
+
+function daysUntil(dateStr?: string): number | null {
+  if (!dateStr) return null;
+  return Math.ceil((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '?';
+  return ((parts[0][0] ?? '') + (parts[parts.length - 1][0] ?? '')).toUpperCase();
+}
+
+function StatusPill({ status }: { status: string }) {
+  const config: Record<string, { bg: string; color: string; text: string }> = {
+    active: { bg: '#DCFCE7', color: '#166534', text: 'Active' },
+    pending_verification: { bg: '#FEF3C7', color: '#92400E', text: 'Pending verification' },
+    suspended: { bg: '#FEE2E2', color: '#991B1B', text: 'Suspended' },
+  };
+  const s = config[status] ?? config['pending_verification'];
+  return (
+    <span style={{ fontSize: '10px', fontWeight: 600, padding: '3px 10px', borderRadius: '20px', background: s.bg, color: s.color, marginLeft: '10px', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
+      {s.text}
+    </span>
+  );
+}
+
+function CandidateAvatar({ url, name }: { url?: string; name: string }) {
+  const [err, setErr] = useState(false);
+  const size = 64;
+  const initials = getInitials(name);
+
+  if (!url || err) {
+    return (
+      <div style={{ width: size, height: size, borderRadius: '50%', background: '#F6F6F4', border: '0.5px solid #E8E8E5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 16 }}>
+        <span style={{ fontSize: '20px', fontWeight: 600, color: '#2B2F36', fontFamily: 'inherit' }}>{initials}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, marginRight: 16 }}>
+      <Image src={url} alt={name} width={size} height={size} style={{ objectFit: 'cover', objectPosition: 'top', width: '100%', height: '100%' }} onError={() => setErr(true)} />
+    </div>
+  );
+}
+
+function PartyCell({ partyId }: { partyId?: string }) {
+  const [imgErr, setImgErr] = useState(false);
+  const party = JCE_PARTIES.find(p => p.id === partyId);
+  if (!party) return <span style={{ fontSize: '13px', color: '#2B2F36' }}>—</span>;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      {!imgErr ? (
+        <Image src={`/images/parties/${party.id}.png`} alt={party.abbr} width={20} height={20} style={{ objectFit: 'contain' }} onError={() => setImgErr(true)} />
+      ) : (
+        <div style={{ width: 20, height: 20, background: '#F6F6F4', borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 700, color: '#2B2F36' }}>{party.abbr.slice(0, 3)}</div>
+      )}
+      <span style={{ fontSize: '9px', fontWeight: 600, background: '#F6F6F4', border: '0.5px solid #E8E8E5', borderRadius: 3, padding: '1px 5px', color: '#767676' }}>{party.abbr}</span>
+      <span style={{ fontSize: '13px', fontWeight: 500, color: '#2B2F36' }}>{party.name}</span>
+    </div>
+  );
+}
+
+interface ActionCardProps {
+  iconBg: string;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  teaser: React.ReactNode;
+  buttonBg: string;
+  buttonText: string;
+  onButtonClick: () => void;
+}
+
+function ActionCard({ iconBg, icon, title, description, teaser, buttonBg, buttonText, onButtonClick }: ActionCardProps) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ background: 'white', border: `0.5px solid ${hover ? 'rgba(0,0,0,0.2)' : '#E8E8E5'}`, borderRadius: 12, padding: 24, display: 'flex', flexDirection: 'column', transition: 'border-color 0.15s' }}
+    >
+      <div style={{ width: 40, height: 40, borderRadius: 10, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+        {icon}
+      </div>
+      <p style={{ fontSize: 14, fontWeight: 600, color: '#2B2F36', margin: '0 0 6px', fontFamily: 'inherit' }}>{title}</p>
+      <p style={{ fontSize: 12, color: '#767676', lineHeight: 1.6, flex: 1, margin: '0 0 16px', fontFamily: 'inherit' }}>{description}</p>
+      {teaser}
+      <button
+        onClick={onButtonClick}
+        style={{ width: '100%', height: 36, background: buttonBg, color: 'white', border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
+      >
+        {buttonText}
+      </button>
+    </div>
+  );
+}
+
+export default function DashboardClient({ userId }: { userId: string }) {
   const router = useRouter();
-  const [copyLabel, setCopyLabel] = useState('Copy donation link');
+  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [donations, setDonations] = useState<Donation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [copyLabel, setCopyLabel] = useState('Copy link');
 
-  const totalRaised = donations.reduce((s, d) => s + (d.amount ?? 0), 0);
-  const totalDonors = donations.length;
-  const avgDonation = totalDonors > 0 ? Math.round(totalRaised / totalDonors) : 0;
-  const daysLeft = campaign.election_deadline
-    ? Math.ceil((new Date(campaign.election_deadline).getTime() - Date.now()) / 86400000)
-    : null;
+  useEffect(() => {
+    async function load() {
+      const sb = createBrowserSupabaseClient();
+      const { data: camp } = await sb.from('campaigns').select('*').eq('user_id', userId).single();
+      if (!camp) { router.push('/onboarding'); return; }
+      setCampaign(camp);
+      const { data: dons } = await sb.from('donations').select('*').eq('campaign_id', camp.id);
+      setDonations(dons ?? []);
+      setLoading(false);
+    }
+    load();
+  }, [userId, router]);
 
-  const donationLink = `https://impulso.do/dona/${campaign.slug}`;
+  async function handleSignOut() {
+    const sb = createBrowserSupabaseClient();
+    await sb.auth.signOut();
+    router.push('/');
+  }
 
   function handleCopyLink() {
-    navigator.clipboard.writeText(donationLink);
+    if (!campaign) return;
+    navigator.clipboard.writeText(`https://impulso.do/dona/${campaign.slug}`);
     setCopyLabel('Copied ✓');
-    setTimeout(() => setCopyLabel('Copy donation link'), 2000);
+    setTimeout(() => setCopyLabel('Copy link'), 2000);
   }
 
-  function exportCSV() {
-    const headers = ['Nombre', 'Cédula', 'Monto (RD$)', 'Fecha', 'Tipo'];
-    const rows = donations.map((d) => [
-      d.donor_name ?? 'Anónimo',
-      d.donor_cedula ?? '',
-      d.amount ?? 0,
-      new Date(d.created_at).toLocaleDateString('es-DO'),
-      d.recurring ? 'Recurrente' : 'Único',
-    ]);
-    const csv = [headers, ...rows].map((r) => r.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const date = new Date().toISOString().split('T')[0];
-    a.download = `reporte-jce-${campaign.slug}-${date}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <p style={{ fontSize: 13, color: '#767676' }}>Loading your dashboard…</p>
+      </div>
+    );
   }
 
-  // Status banner config
-  type StatusKey = 'pending_verification' | 'active' | 'suspended';
-  const statusConfig: Record<StatusKey, {
-    bg: string;
-    border: string;
-    icon: string;
-    textColor: string;
-    text: string;
-    pillBg: string;
-    pillColor: string;
-    pillText: string;
-  }> = {
-    pending_verification: {
-      bg: '#FEF3C7',
-      border: '3px solid #F59E0B',
-      icon: '⏳',
-      textColor: '#92400E',
-      text: 'Your campaign is pending JCE verification. Our team will review and activate it within 1–2 business days.',
-      pillBg: '#FDE68A',
-      pillColor: '#92400E',
-      pillText: 'Pending verification',
-    },
-    active: {
-      bg: '#F0FDF4',
-      border: '3px solid #16A34A',
-      icon: '✅',
-      textColor: '#166534',
-      text: 'Your campaign is live. Your donation link is active.',
-      pillBg: '#DCFCE7',
-      pillColor: '#16A34A',
-      pillText: 'Active',
-    },
-    suspended: {
-      bg: '#FFF5F5',
-      border: '3px solid #C8102E',
-      icon: '🚫',
-      textColor: '#7F1D1D',
-      text: 'Your campaign has been suspended. Contact hello@impulso.do.',
-      pillBg: '#FEE2E2',
-      pillColor: '#C8102E',
-      pillText: 'Suspended',
-    },
-  };
+  if (!campaign) return null;
 
-  const status = (campaign.status as StatusKey) ?? 'pending_verification';
-  const banner = statusConfig[status] ?? statusConfig['pending_verification'];
+  const totalRaised = donations.reduce((s, d) => s + (d.amount ?? 0), 0);
+  const donorCount = donations.length;
+  const avgDonation = donorCount > 0 ? Math.round(totalRaised / donorCount) : 0;
+  const daysToElection = daysUntil(campaign.election_deadline);
+  const daysToFundraising = daysUntil(campaign.fundraising_deadline);
+  const donationLink = `impulso.do/dona/${campaign.slug}`;
+  const electionTypeLabel = ELECTION_TYPE_LABELS[campaign.election_date_type ?? campaign.election_type ?? ''] ?? 'General election';
 
-  const statCards = [
-    { label: 'Total raised', value: `RD$${totalRaised.toLocaleString('es-DO')}` },
-    { label: 'Donors', value: `${totalDonors}` },
-    { label: 'Avg. donation', value: `RD$${avgDonation.toLocaleString('es-DO')}` },
-    { label: 'Days left', value: daysLeft !== null ? `${daysLeft}` : '—' },
+  const metaColumns = [
+    {
+      label: 'Party',
+      value: <PartyCell partyId={campaign.party_affiliation} />,
+      sub: null,
+    },
+    {
+      label: 'Running for',
+      value: RACE_LABELS[campaign.race_type ?? ''] ?? campaign.race_type ?? '—',
+      sub: electionTypeLabel,
+    },
+    {
+      label: 'Election date',
+      value: formatDate(campaign.election_deadline),
+      sub: daysToElection !== null ? `${daysToElection} days away` : null,
+    },
+    {
+      label: 'Last day to raise funds',
+      value: formatDate(campaign.fundraising_deadline),
+      sub: daysToFundraising !== null ? `${daysToFundraising} days remaining` : null,
+    },
   ];
 
   return (
-    <div style={{ background: 'white', maxWidth: '1100px', margin: '0 auto', padding: '40px 32px' }}>
-      {/* Top bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '28px' }}>
-        <div>
-          <p style={{ fontSize: '22px', fontWeight: 700, color: '#2B2F36', letterSpacing: '-0.02em', margin: '0 0 4px' }}>
-            {campaign.candidate_name}
-          </p>
-          <a
-            href={donationLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ fontSize: '12px', color: '#767676', textDecoration: 'none' }}
-            onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
-            onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
-          >
-            {donationLink}
-          </a>
-        </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button
-            onClick={() => router.push('/dashboard/edit')}
-            style={{
-              border: '1px solid #E8E8E5',
-              background: 'white',
-              color: '#2B2F36',
-              fontFamily: 'inherit',
-              fontSize: '12px',
-              fontWeight: 600,
-              padding: '8px 16px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            Edit campaign
-          </button>
-          <button
-            onClick={handleCopyLink}
-            style={{
-              background: '#C8102E',
-              color: 'white',
-              border: 'none',
-              fontFamily: 'inherit',
-              fontSize: '12px',
-              fontWeight: 600,
-              padding: '8px 16px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            {copyLabel}
-          </button>
-        </div>
-      </div>
+    <>
+      <style>{`
+        @media (max-width: 768px) {
+          .passport-top { flex-direction: column !important; align-items: center !important; text-align: center !important; }
+          .passport-top .avatar { margin-right: 0 !important; margin-bottom: 12px !important; }
+          .passport-top .edit-btn { width: 100% !important; margin-top: 12px !important; }
+          .meta-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 16px !important; }
+          .meta-col { padding-right: 0 !important; margin-right: 0 !important; border-right: none !important; }
+          .action-grid { grid-template-columns: 1fr !important; }
+          .link-row { flex-wrap: wrap !important; }
+        }
+        @media (max-width: 1024px) and (min-width: 769px) {
+          .action-grid { grid-template-columns: repeat(2, 1fr) !important; }
+        }
+      `}</style>
 
-      {/* Status banner */}
-      <div style={{
-        borderRadius: '8px',
-        padding: '12px 16px',
-        marginBottom: '28px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        background: banner.bg,
-        borderLeft: banner.border,
-      }}>
-        <span>{banner.icon}</span>
-        <span style={{ flex: 1, fontSize: '13px', color: banner.textColor }}>
-          {banner.text}
-        </span>
-        <span style={{
-          background: banner.pillBg,
-          color: banner.pillColor,
-          fontSize: '11px',
-          fontWeight: 600,
-          padding: '3px 10px',
-          borderRadius: '20px',
-          whiteSpace: 'nowrap',
-        }}>
-          {banner.pillText}
-        </span>
-      </div>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 32px', background: 'white' }}>
 
-      {/* Stats grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr 1fr 1fr',
-        gap: '16px',
-        marginBottom: '28px',
-      }}>
-        {statCards.map((card) => (
-          <div
-            key={card.label}
-            style={{
-              background: 'white',
-              border: '1px solid #E8E8E5',
-              borderRadius: '10px',
-              padding: '20px',
-            }}
-          >
-            <p style={{
-              fontSize: '10px',
-              textTransform: 'uppercase',
-              color: '#767676',
-              letterSpacing: '0.08em',
-              margin: '0 0 6px',
-            }}>
-              {card.label}
-            </p>
-            <p style={{
-              fontSize: '28px',
-              fontWeight: 700,
-              color: '#2B2F36',
-              letterSpacing: '-0.03em',
-              margin: 0,
-            }}>
-              {card.value}
-            </p>
+        {/* ── Passport card ─────────────────────────────────── */}
+        <div style={{ background: 'white', border: '0.5px solid #E8E8E5', borderRadius: 12, padding: '24px 28px', marginBottom: 24 }}>
+
+          {/* Top row */}
+          <div className="passport-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* Avatar */}
+            <div className="avatar" style={{ marginRight: 0 }}>
+              <CandidateAvatar url={campaign.candidate_photo_url} name={campaign.candidate_name} />
+            </div>
+
+            {/* Name + campaign name */}
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 22, fontWeight: 600, color: '#2B2F36', letterSpacing: '-0.03em', fontFamily: 'inherit' }}>
+                  {campaign.candidate_name}
+                </span>
+                <StatusPill status={campaign.status} />
+              </div>
+              {campaign.campaign_name && (
+                <p style={{ fontSize: 13, color: '#767676', margin: '2px 0 0' }}>{campaign.campaign_name}</p>
+              )}
+            </div>
+
+            {/* Edit button */}
+            <button
+              className="edit-btn"
+              onClick={() => router.push('/dashboard/edit')}
+              style={{ border: '0.5px solid #E8E8E5', background: 'white', color: '#2B2F36', fontSize: 12, fontWeight: 500, height: 34, padding: '0 14px', borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, marginLeft: 16 }}
+            >
+              Edit campaign
+            </button>
           </div>
-        ))}
-      </div>
 
-      {/* Donations table */}
-      <p style={{ fontSize: '16px', fontWeight: 600, color: '#2B2F36', margin: '0 0 14px' }}>
-        Recent donations
-      </p>
-      <div style={{ border: '1px solid #E8E8E5', borderRadius: '10px', overflow: 'hidden' }}>
-        {donations.length === 0 ? (
-          <div style={{ padding: '32px', textAlign: 'center', fontSize: '13px', color: '#767676' }}>
-            No donations yet. Share your link to get started!
-          </div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#F6F6F4' }}>
-                {['Donor', 'Amount', 'Date', 'Type'].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: '10px 16px',
-                      fontSize: '10px',
-                      textTransform: 'uppercase',
-                      color: '#767676',
-                      letterSpacing: '0.06em',
-                      fontWeight: 600,
-                      textAlign: 'left',
-                      borderBottom: '1px solid #E8E8E5',
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {donations.map((d, i) => (
-                <tr key={d.id ?? i}>
-                  <td style={{ padding: '12px 16px', borderBottom: '0.5px solid #F0F0F0', fontSize: '13px', color: '#2B2F36' }}>
-                    {d.donor_name ?? 'Anonymous'}
-                  </td>
-                  <td style={{ padding: '12px 16px', borderBottom: '0.5px solid #F0F0F0', fontSize: '13px', fontWeight: 600, color: '#16A34A' }}>
-                    +RD${d.amount?.toLocaleString('es-DO')}
-                  </td>
-                  <td style={{ padding: '12px 16px', borderBottom: '0.5px solid #F0F0F0', fontSize: '13px', color: '#2B2F36' }}>
-                    {new Date(d.created_at).toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' })}
-                  </td>
-                  <td style={{ padding: '12px 16px', borderBottom: '0.5px solid #F0F0F0', fontSize: '13px', color: '#2B2F36' }}>
-                    <span style={{
-                      fontSize: '10px',
-                      fontWeight: 600,
-                      borderRadius: '20px',
-                      padding: '2px 8px',
-                      background: d.recurring ? '#EFF6FF' : '#F6F6F4',
-                      color: d.recurring ? '#1D4ED8' : '#767676',
-                    }}>
-                      {d.recurring ? 'Recurring' : 'One-time'}
-                    </span>
-                  </td>
-                </tr>
+          {/* Meta row */}
+          <div style={{ borderTop: '0.5px solid #E8E8E5', paddingTop: 16, marginTop: 16 }}>
+            <div className="meta-grid" style={{ display: 'flex' }}>
+              {metaColumns.map((col, i) => (
+                <div
+                  key={col.label}
+                  className="meta-col"
+                  style={{
+                    flex: 1,
+                    paddingRight: i < metaColumns.length - 1 ? 20 : 0,
+                    marginRight: i < metaColumns.length - 1 ? 20 : 0,
+                    borderRight: i < metaColumns.length - 1 ? '0.5px solid #E8E8E5' : 'none',
+                  }}
+                >
+                  <p style={{ fontSize: 10, textTransform: 'uppercase', color: '#767676', letterSpacing: '0.08em', margin: '0 0 4px', fontFamily: 'inherit' }}>{col.label}</p>
+                  {typeof col.value === 'string'
+                    ? <p style={{ fontSize: 13, fontWeight: 500, color: '#2B2F36', margin: 0, fontFamily: 'inherit' }}>{col.value}</p>
+                    : col.value}
+                  {col.sub && <p style={{ fontSize: 11, color: '#767676', margin: '1px 0 0', fontFamily: 'inherit' }}>{col.sub}</p>}
+                </div>
               ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+            </div>
+          </div>
 
-      <div style={{ marginTop: '16px' }}>
-        <button
-          onClick={exportCSV}
-          style={{
-            border: '1px solid #E8E8E5',
-            background: 'white',
-            color: '#2B2F36',
-            fontFamily: 'inherit',
-            fontSize: '12px',
-            fontWeight: 600,
-            padding: '8px 16px',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
-          Export JCE report
-        </button>
+          {/* Link row */}
+          <div className="link-row" style={{ borderTop: '0.5px solid #E8E8E5', paddingTop: 12, marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 12, color: '#767676', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {donationLink}
+            </span>
+            <button
+              onClick={handleCopyLink}
+              style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 500, color: '#C8102E', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, padding: 0 }}
+            >
+              {copyLabel}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Action cards ───────────────────────────────────── */}
+        <div className="action-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+
+          {/* Card 1 — Analytics */}
+          <ActionCard
+            iconBg="#E6F1FB"
+            icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#185FA5" strokeWidth="1.5" strokeLinecap="round"><path d="M3 20h18"/><rect x="5" y="14" width="3" height="6"/><rect x="10.5" y="9" width="3" height="11"/><rect x="16" y="4" width="3" height="16"/></svg>}
+            title="Donation analytics"
+            description="Track every donation in real time. See who's giving, how much, and export JCE-ready reports."
+            teaser={
+              <div style={{ background: '#F6F6F4', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
+                <p style={{ fontSize: 20, fontWeight: 600, color: '#2B2F36', letterSpacing: '-0.03em', margin: 0, fontFamily: 'inherit' }}>
+                  RD${totalRaised.toLocaleString('es-DO')}
+                </p>
+                <p style={{ fontSize: 11, color: '#767676', margin: '1px 0 0', fontFamily: 'inherit' }}>
+                  {donorCount === 0 ? 'No donations yet — share your link to get started' : `raised · ${donorCount} donor${donorCount !== 1 ? 's' : ''} so far`}
+                </p>
+              </div>
+            }
+            buttonBg="#185FA5"
+            buttonText="View analytics →"
+            onButtonClick={() => router.push('/dashboard/analytics')}
+          />
+
+          {/* Card 2 — Preview */}
+          <ActionCard
+            iconBg="#EEEDFE"
+            icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#534AB7" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>}
+            title="Preview donation page"
+            description="See exactly what donors see when they visit your link. Make sure everything looks right before sharing."
+            teaser={
+              <div style={{ background: '#F6F6F4', borderRadius: 6, height: 64, marginBottom: 14, border: '0.5px solid #E8E8E5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 4 }}>
+                <div style={{ width: 80, height: 3, background: '#C8102E', borderRadius: 2 }} />
+                <div style={{ width: 60, height: 3, background: '#E8E8E5', borderRadius: 2 }} />
+                <div style={{ width: 48, height: 3, background: '#E8E8E5', borderRadius: 2 }} />
+              </div>
+            }
+            buttonBg="#534AB7"
+            buttonText="Preview page →"
+            onButtonClick={() => window.open(`/en/dona/${campaign.slug}`, '_blank')}
+          />
+
+          {/* Card 3 — Outreach */}
+          <ActionCard
+            iconBg="#DCFCE7"
+            icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="1.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>}
+            title="AI outreach campaign"
+            description="Upload your contact list and let AI generate personalized fundraising emails and call scripts — ready for your team to send and use."
+            teaser={
+              <div style={{ background: '#F6F6F4', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
+                <p style={{ fontSize: 13, fontWeight: 500, color: '#767676', margin: 0, fontFamily: 'inherit' }}>Email campaigns · AI call scripts</p>
+                <p style={{ fontSize: 11, color: '#767676', margin: '1px 0 0', fontFamily: 'inherit' }}>Powered by Claude AI</p>
+              </div>
+            }
+            buttonBg="#166634"
+            buttonText="Start outreach →"
+            onButtonClick={() => router.push('/outreach')}
+          />
+        </div>
+
+        {/* ── Sign out ───────────────────────────────────────── */}
+        <div style={{ textAlign: 'center', marginTop: 24 }}>
+          <button
+            onClick={handleSignOut}
+            style={{ background: 'none', border: 'none', fontSize: 12, color: '#767676', textDecoration: 'underline', cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            Sign out
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
