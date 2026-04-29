@@ -238,12 +238,6 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
                 )}
               </div>
           }
-          {/* Lang toggle */}
-          <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 10 }}>
-            <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.8)', background: 'rgba(255,255,255,0.15)', padding: '3px 9px', borderRadius: 20 }}>
-              {locale === 'en' ? 'ES' : 'EN'}
-            </span>
-          </div>
         </div>
 
         {/* Two-column content */}

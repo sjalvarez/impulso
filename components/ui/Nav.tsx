@@ -44,18 +44,6 @@ export default function Nav({ locale }: Props) {
             <Link href="/about" style={linkStyle}>{t('about')}</Link>
           </div>
 
-          {/* Lang toggle */}
-          <button
-            onClick={toggleLocale}
-            style={{
-              background: 'none', border: 'none',
-              fontSize: '11px', fontWeight: 600, color: '#767676',
-              cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-            }}
-          >
-            {locale === 'en' ? 'ES' : 'EN'}
-          </button>
-
           {/* UserMenu handles CTA or avatar depending on auth state */}
           <UserMenu locale={locale} />
         </div>
