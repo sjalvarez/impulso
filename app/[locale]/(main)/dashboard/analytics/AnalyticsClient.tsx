@@ -1,7 +1,6 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from '@/lib/i18n/navigation';
-import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 interface Campaign {
@@ -79,18 +78,12 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 
 const PAGE_SIZE = 20;
 
-export default function AnalyticsClient({ campaign }: { campaign: Campaign }) {
+export default function AnalyticsClient({ campaign, initialDonations }: { campaign: Campaign; initialDonations: Donation[] }) {
   const router = useRouter();
-  const [donations, setDonations] = useState<Donation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [donations] = useState<Donation[]>(initialDonations);
+  const loading = false;
   const [search, setSearch] = useState('');
   const [shown, setShown] = useState(PAGE_SIZE);
-
-  useEffect(() => {
-    const sb = createBrowserSupabaseClient();
-    sb.from('donations').select('*').eq('campaign_id', campaign.id).order('created_at', { ascending: false })
-      .then(({ data }) => { setDonations(data ?? []); setLoading(false); });
-  }, [campaign.id]);
 
   const totalRaised = useMemo(() => donations.reduce((s, d) => s + d.amount, 0), [donations]);
   const donorCount = donations.length;
