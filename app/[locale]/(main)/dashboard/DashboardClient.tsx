@@ -94,7 +94,8 @@ function PartyCell({ partyId }: { partyId?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       {!imgErr ? (
-        <Image src={`/images/party_logos/${party.id}.png`} alt={party.abbr} width={20} height={20} style={{ objectFit: 'contain' }} onError={() => setImgErr(true)} />
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`/images/party_logos/${party.id}.png`} alt={party.abbr} width={20} height={20} style={{ objectFit: 'contain' }} onError={() => setImgErr(true)} />
       ) : (
         <span style={{ fontSize: '9px', fontWeight: 600, background: '#F6F6F4', border: '0.5px solid #E8E8E5', borderRadius: 3, padding: '1px 5px', color: '#767676' }}>{party.abbr}</span>
       )}
