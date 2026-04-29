@@ -37,6 +37,7 @@ function extractJson(raw: string): string {
 export async function generateCampaignSummary(campaignId: string): Promise<{
   intro: string;
   proposals: { title: string; description: string }[];
+  _error?: string;
 } | null> {
   // Service role — bypasses RLS so server actions always have read/write access
   const sb = createClient(
@@ -51,19 +52,17 @@ export async function generateCampaignSummary(campaignId: string): Promise<{
     .single();
 
   if (campError || !campaign) {
-    console.error('[generate-summary] Campaign fetch error:', campError?.message);
-    return null;
+    return { intro: '', proposals: [], _error: `DB error: ${campError?.message ?? 'campaign not found'}` };
   }
   if (!campaign.campaign_platform_url) {
-    console.error('[generate-summary] No PDF URL for campaign:', campaignId);
-    return null;
+    return { intro: '', proposals: [], _error: 'No PDF uploaded for this campaign' };
   }
 
   // Fetch PDF bytes ourselves — more reliable than passing URL to pdf-parse in serverless
   let pdfText = '';
   try {
     const pdfRes = await fetch(campaign.campaign_platform_url);
-    if (!pdfRes.ok) throw new Error(`PDF fetch failed: ${pdfRes.status}`);
+    if (!pdfRes.ok) throw new Error(`PDF fetch ${pdfRes.status}`);
     const arrayBuffer = await pdfRes.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
@@ -75,13 +74,11 @@ export async function generateCampaignSummary(campaignId: string): Promise<{
     pdfText = result.text.slice(0, 8000);
     await parser.destroy();
   } catch (e) {
-    console.error('[generate-summary] PDF parse error:', e);
-    return null;
+    return { intro: '', proposals: [], _error: `PDF parse failed: ${e instanceof Error ? e.message : String(e)}` };
   }
 
   if (!pdfText.trim()) {
-    console.error('[generate-summary] PDF text is empty — may be a scanned image PDF');
-    return null;
+    return { intro: '', proposals: [], _error: 'PDF has no readable text (may be a scanned image)' };
   }
 
   const system = `You are a campaign assistant. Based ONLY on the campaign platform document provided, generate a very concise summary.
@@ -110,8 +107,7 @@ Format:
   try {
     summary = JSON.parse(extractJson(raw));
   } catch (e) {
-    console.error('[generate-summary] JSON parse failed. Raw:', raw.slice(0, 300), e);
-    return null;
+    return { intro: '', proposals: [], _error: `JSON parse failed. Claude returned: ${raw.slice(0, 200)}` };
   }
 
   const { error: updateError } = await sb

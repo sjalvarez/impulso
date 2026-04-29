@@ -81,7 +81,7 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
       setGeneratingSummary(true);
       setSummaryError('');
       generateCampaignSummary(campaign.id).then(result => {
-        if (result?.intro) {
+        if (result?._error) { setSummaryError(result._error); } else if (result?.intro) {
           setIntroText(result.intro);
         } else {
           setSummaryError('Could not generate summary — check that your PDF has readable text.');
@@ -157,7 +157,7 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
     setSummaryError('');
     try {
       const result = await generateCampaignSummary(campaign.id);
-      if (result?.intro) {
+      if (result?._error) { setSummaryError(result._error); } else if (result?.intro) {
         setIntroText(result.intro);
       } else {
         setSummaryError('Could not generate summary — check that your PDF has readable text.');
