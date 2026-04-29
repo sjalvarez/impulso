@@ -21,6 +21,7 @@ interface Campaign {
   facebook?: string;
   twitter?: string;
   ai_summary?: { intro?: string; proposals?: { title: string; description: string }[] } | null;
+  proposal_overrides?: { title: string; description: string }[] | null;
   page_intro_override?: string;
   page_show_scorecards?: boolean;
   page_show_chatbot?: boolean;
@@ -215,10 +216,10 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
               </p>
             </div>
 
-            {/* Proposals */}
-            {campaign.ai_summary?.proposals?.length ? (
+            {/* Proposals — proposal_overrides takes precedence over ai_summary.proposals */}
+            {(campaign.proposal_overrides?.length ? campaign.proposal_overrides : campaign.ai_summary?.proposals)?.length ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
-                {campaign.ai_summary.proposals.slice(0, 3).map((p, i) => (
+                {(campaign.proposal_overrides?.length ? campaign.proposal_overrides : campaign.ai_summary?.proposals)!.slice(0, 3).map((p, i) => (
                   <div key={i} style={{ background: '#F6F6F4', borderRadius: 7, padding: '9px 11px', border: '0.5px solid #E8E8E5' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
                       <div style={{ width: 15, height: 15, borderRadius: '50%', background: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
