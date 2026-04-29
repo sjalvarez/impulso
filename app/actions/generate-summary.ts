@@ -17,35 +17,71 @@ async function callClaude(system: string, userContent: string, maxTokens: number
       messages: [{ role: 'user', content: userContent }],
     }),
   });
-  if (!res.ok) return '';
+  if (!res.ok) {
+    const err = await res.text();
+    console.error('[generate-summary] Anthropic error:', res.status, err);
+    return '';
+  }
   const data = await res.json() as { content: Array<{ type: string; text: string }> };
   const block = data.content[0];
   return block?.type === 'text' ? block.text : '';
 }
 
-export async function generateCampaignSummary(campaignId: string) {
-  const sb = await createServerSupabaseClient();
-  const { data: campaign } = await sb.from('campaigns').select('campaign_platform_url, candidate_name').eq('id', campaignId).single();
+function extractJson(raw: string): string {
+  // Strip markdown code fences if present: ```json ... ``` or ``` ... ```
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) return fenced[1].trim();
+  // Find first { and last } in case there's surrounding text
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start !== -1 && end !== -1 && end > start) return raw.slice(start, end + 1);
+  return raw.trim();
+}
 
-  if (!campaign?.campaign_platform_url) return null;
+export async function generateCampaignSummary(campaignId: string): Promise<{
+  intro: string;
+  proposals: { title: string; description: string }[];
+} | null> {
+  const sb = await createServerSupabaseClient();
+  const { data: campaign, error: campError } = await sb
+    .from('campaigns')
+    .select('campaign_platform_url, candidate_name')
+    .eq('id', campaignId)
+    .single();
+
+  if (campError) {
+    console.error('[generate-summary] Campaign fetch error:', campError.message);
+    return null;
+  }
+  if (!campaign?.campaign_platform_url) {
+    console.error('[generate-summary] No campaign_platform_url for campaign:', campaignId);
+    return null;
+  }
 
   // Extract text using pdf-parse v2 (pass URL directly — library fetches it)
   let pdfText = '';
   try {
     const parser = new PDFParse({ url: campaign.campaign_platform_url });
     const result = await parser.getText();
-    pdfText = result.text.slice(0, 8000); // limit context
+    pdfText = result.text.slice(0, 8000);
     await parser.destroy();
-  } catch {
+  } catch (e) {
+    console.error('[generate-summary] PDF parse error:', e);
     return null;
   }
 
-  // Call Claude
+  if (!pdfText.trim()) {
+    console.error('[generate-summary] PDF text is empty');
+    return null;
+  }
+
   const system = `You are a campaign assistant. Based ONLY on the campaign platform document provided, generate:
 1. A short intro paragraph (2-3 sentences, warm and direct, written as if introducing the candidate to a donor)
 2. Exactly 3 key proposals (each with a short title max 5 words, and a description max 2 sentences)
 
-Respond in JSON only, no markdown, no preamble:
+Respond with ONLY a raw JSON object — no markdown, no code fences, no explanation. Start your response with { and end with }.
+
+Format:
 {
   "intro": "...",
   "proposals": [
@@ -55,16 +91,27 @@ Respond in JSON only, no markdown, no preamble:
   ]
 }
 
-If the document does not contain enough information for a proposal, omit it. Never invent facts not present in the document.`;
+Never invent facts not present in the document.`;
 
-  const text = await callClaude(system, `Campaign platform document:\n\n${pdfText}`, 1000);
+  const raw = await callClaude(system, `Campaign platform document:\n\n${pdfText}`, 1200);
+  if (!raw) return null;
+
   let summary = null;
   try {
-    summary = JSON.parse(text);
-  } catch {
+    summary = JSON.parse(extractJson(raw));
+  } catch (e) {
+    console.error('[generate-summary] JSON parse failed. Raw response:', raw.slice(0, 500), e);
     return null;
   }
 
-  await sb.from('campaigns').update({ ai_summary: summary }).eq('id', campaignId);
+  const { error: updateError } = await sb
+    .from('campaigns')
+    .update({ ai_summary: summary })
+    .eq('id', campaignId);
+
+  if (updateError) {
+    console.error('[generate-summary] Supabase update error:', updateError.message);
+  }
+
   return summary;
 }

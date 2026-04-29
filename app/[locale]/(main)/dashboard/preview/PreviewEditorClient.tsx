@@ -35,6 +35,7 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
   const [introText, setIntroText] = useState(campaign.page_intro_override ?? campaign.ai_summary?.intro ?? '');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(false);
+  const [summaryError, setSummaryError] = useState('');
   const [generatingSummary, setGeneratingSummary] = useState(false);
   const [generatingColors, setGeneratingColors] = useState(false);
   const [pdfUploading, setPdfUploading] = useState(false);
@@ -47,10 +48,18 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
   useEffect(() => {
     if (campaign.campaign_platform_url && !campaign.ai_summary && !introText) {
       setGeneratingSummary(true);
+      setSummaryError('');
       generateCampaignSummary(campaign.id).then(result => {
-        if (result?.intro) setIntroText(result.intro);
+        if (result?.intro) {
+          setIntroText(result.intro);
+        } else {
+          setSummaryError('Could not generate summary — check that your PDF has readable text.');
+        }
         setGeneratingSummary(false);
-      }).catch(() => setGeneratingSummary(false));
+      }).catch((e) => {
+        setSummaryError(`Error: ${e?.message ?? 'Unknown error'}`);
+        setGeneratingSummary(false);
+      });
     }
     // Auto-generate colors if banner exists but no colors saved
     if (!campaign.page_primary_color || !campaign.page_accent_color) {
@@ -91,8 +100,17 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
 
   async function handleGenerateSummary() {
     setGeneratingSummary(true);
-    const result = await generateCampaignSummary(campaign.id);
-    if (result?.intro) setIntroText(result.intro);
+    setSummaryError('');
+    try {
+      const result = await generateCampaignSummary(campaign.id);
+      if (result?.intro) {
+        setIntroText(result.intro);
+      } else {
+        setSummaryError('Could not generate summary — check that your PDF has readable text.');
+      }
+    } catch (e: unknown) {
+      setSummaryError(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
     setGeneratingSummary(false);
   }
 
@@ -187,9 +205,15 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
                 style={{ width: '100%', border: '0.5px solid #E8E8E5', borderRadius: 6, padding: '8px 10px', fontSize: 11, fontFamily: 'inherit', minHeight: 64, lineHeight: 1.6, resize: 'vertical', boxSizing: 'border-box', outline: 'none' }}
               />
               <button onClick={handleGenerateSummary} disabled={generatingSummary}
-                style={{ marginTop: 4, background: 'none', border: 'none', fontSize: 10, color: '#C8102E', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
-                {generatingSummary ? 'Generating…' : '↺ Regenerate from PDF'}
+                style={{ marginTop: 4, background: 'none', border: 'none', fontSize: 10, color: '#C8102E', cursor: generatingSummary ? 'wait' : 'pointer', fontFamily: 'inherit', padding: 0 }}>
+                {generatingSummary ? '⏳ Generating…' : '↺ Regenerate from PDF'}
               </button>
+              {summaryError && (
+                <p style={{ fontSize: 10, color: '#C8102E', marginTop: 4, fontFamily: 'inherit' }}>{summaryError}</p>
+              )}
+              {!campaign.campaign_platform_url && !pdfUrl && (
+                <p style={{ fontSize: 10, color: '#767676', marginTop: 4, fontFamily: 'inherit' }}>Upload a PDF below first.</p>
+              )}
             </div>
 
             {/* Toggles */}
