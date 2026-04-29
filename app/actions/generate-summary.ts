@@ -1,5 +1,5 @@
 'use server';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
 
 async function callClaude(system: string, userContent: string, maxTokens: number): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -17,8 +17,7 @@ async function callClaude(system: string, userContent: string, maxTokens: number
     }),
   });
   if (!res.ok) {
-    const err = await res.text();
-    console.error('[generate-summary] Anthropic error:', res.status, err);
+    console.error('[generate-summary] Anthropic error:', res.status, await res.text());
     return '';
   }
   const data = await res.json() as { content: Array<{ type: string; text: string }> };
@@ -27,10 +26,8 @@ async function callClaude(system: string, userContent: string, maxTokens: number
 }
 
 function extractJson(raw: string): string {
-  // Strip markdown code fences if present: ```json ... ``` or ``` ... ```
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced) return fenced[1].trim();
-  // Find first { and last } in case there's surrounding text
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');
   if (start !== -1 && end !== -1 && end > start) return raw.slice(start, end + 1);
@@ -41,29 +38,39 @@ export async function generateCampaignSummary(campaignId: string): Promise<{
   intro: string;
   proposals: { title: string; description: string }[];
 } | null> {
-  const sb = await createServerSupabaseClient();
+  // Service role — bypasses RLS so server actions always have read/write access
+  const sb = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+
   const { data: campaign, error: campError } = await sb
     .from('campaigns')
     .select('campaign_platform_url, candidate_name')
     .eq('id', campaignId)
     .single();
 
-  if (campError) {
-    console.error('[generate-summary] Campaign fetch error:', campError.message);
+  if (campError || !campaign) {
+    console.error('[generate-summary] Campaign fetch error:', campError?.message);
     return null;
   }
-  if (!campaign?.campaign_platform_url) {
-    console.error('[generate-summary] No campaign_platform_url for campaign:', campaignId);
+  if (!campaign.campaign_platform_url) {
+    console.error('[generate-summary] No PDF URL for campaign:', campaignId);
     return null;
   }
 
-  // Extract text — dynamic import keeps Turbopack from bundling pdf-parse at build time
+  // Fetch PDF bytes ourselves — more reliable than passing URL to pdf-parse in serverless
   let pdfText = '';
   try {
+    const pdfRes = await fetch(campaign.campaign_platform_url);
+    if (!pdfRes.ok) throw new Error(`PDF fetch failed: ${pdfRes.status}`);
+    const arrayBuffer = await pdfRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mod = await (Function('return import("pdf-parse")')() as Promise<any>);
     const PDFParse = mod.PDFParse ?? mod.default?.PDFParse ?? mod.default;
-    const parser = new PDFParse({ url: campaign.campaign_platform_url });
+    const parser = new PDFParse({ data: new Uint8Array(buffer) });
     const result = await parser.getText();
     pdfText = result.text.slice(0, 8000);
     await parser.destroy();
@@ -73,7 +80,7 @@ export async function generateCampaignSummary(campaignId: string): Promise<{
   }
 
   if (!pdfText.trim()) {
-    console.error('[generate-summary] PDF text is empty');
+    console.error('[generate-summary] PDF text is empty — may be a scanned image PDF');
     return null;
   }
 
@@ -103,7 +110,7 @@ Format:
   try {
     summary = JSON.parse(extractJson(raw));
   } catch (e) {
-    console.error('[generate-summary] JSON parse failed. Raw response:', raw.slice(0, 500), e);
+    console.error('[generate-summary] JSON parse failed. Raw:', raw.slice(0, 300), e);
     return null;
   }
 
