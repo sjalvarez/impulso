@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { useRouter } from '@/lib/i18n/navigation';
@@ -116,6 +116,27 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
 
+  // Attention animation state
+  const [showPulse, setShowPulse] = useState(false);
+  const [bubbleOpacity, setBubbleOpacity] = useState(0);
+
+  useEffect(() => {
+    if (sessionStorage.getItem('chatbot-intro-shown')) return;
+    // Pulse rings fire at 600ms
+    const t1 = setTimeout(() => setShowPulse(true), 600);
+    // Bubble fades in at 400ms
+    const t2 = setTimeout(() => setBubbleOpacity(1), 400);
+    // Bubble fades out after 5s visible
+    const t3 = setTimeout(() => setBubbleOpacity(0), 5400);
+    // Mark done after fade-out completes
+    const t4 = setTimeout(() => {
+      sessionStorage.setItem('chatbot-intro-shown', '1');
+      setShowPulse(false);
+    }, 6000);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const lightBg = hexToRgba(primary, 0.08);
   const finalAmount = selectedAmount ?? (customAmount ? parseInt(customAmount.replace(/,/g, ''), 10) : null);
   const daysLeft = daysUntil(campaign.fundraising_deadline);
@@ -191,6 +212,17 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
           .chat-window { width: 90vw !important; right: 5vw !important; }
           .amount-grid { grid-template-columns: 1fr 1fr !important; }
         }
+        @keyframes chatPulse {
+          0%   { transform: scale(1);   opacity: 0.7; }
+          100% { transform: scale(2.4); opacity: 0; }
+        }
+        .chat-pulse-ring {
+          position: absolute; inset: 0; border-radius: 50%;
+          border: 2px solid var(--pulse-color);
+          animation: chatPulse 1.2s ease-out 1 forwards;
+          pointer-events: none;
+        }
+        .chat-pulse-ring-2 { animation-delay: 0.35s; }
       `}</style>
 
       <div style={{ minHeight: '100vh', background: '#FAFAFA', fontFamily: "'Sora', sans-serif" }}>
@@ -518,12 +550,37 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
               </div>
             </div>
           )}
-          <button
-            onClick={() => setChatOpen(o => !o)}
-            style={{ width: 44, height: 44, borderRadius: '50%', background: primary, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-          </button>
+          <div style={{ position: 'relative', width: 44, height: 44 }}>
+            {/* Pulse rings */}
+            {showPulse && (
+              <>
+                <span className="chat-pulse-ring" style={{ '--pulse-color': primary } as React.CSSProperties} />
+                <span className="chat-pulse-ring chat-pulse-ring-2" style={{ '--pulse-color': primary } as React.CSSProperties} />
+              </>
+            )}
+            {/* Label bubble */}
+            {bubbleOpacity > 0 && (
+              <div style={{
+                position: 'absolute', bottom: 52, right: 0,
+                background: 'white', border: '0.5px solid #E8E8E5',
+                borderRadius: '10px 10px 0 10px',
+                padding: '8px 12px', width: 180,
+                fontSize: 11, lineHeight: 1.5, color: '#2B2F36',
+                boxShadow: '0 4px 14px rgba(0,0,0,0.1)',
+                opacity: bubbleOpacity,
+                transition: 'opacity 0.5s ease',
+                pointerEvents: 'none', whiteSpace: 'normal',
+              }}>
+                Have questions about the platform? Ask me
+              </div>
+            )}
+            <button
+              onClick={() => setChatOpen(o => !o)}
+              style={{ width: 44, height: 44, borderRadius: '50%', background: primary, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', position: 'relative', zIndex: 1 }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            </button>
+          </div>
         </div>
       )}
     </>
