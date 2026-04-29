@@ -360,7 +360,7 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
             Back to dashboard
           </button>
 
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, marginLeft: 16 }}>
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#16A34A', flexShrink: 0 }} />
             <span style={{ fontSize: 11, color: '#767676', fontFamily: 'inherit' }}>Live preview</span>
           </div>
@@ -368,9 +368,9 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
           <div ref={shareRef} style={{ position: 'relative', flexShrink: 0 }}>
             <button
               onClick={() => setShareOpen(o => !o)}
-              style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#2B2F36', color: 'white', border: 'none', borderRadius: 6, padding: '8px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'white', color: '#2B2F36', border: '0.5px solid #D0D0CC', borderRadius: 6, padding: '7px 13px', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2B2F36" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               Share donation link
             </button>
             {shareOpen && (
