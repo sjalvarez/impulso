@@ -919,6 +919,7 @@ export default function OnboardingClient({ locale, userId, userName }: Props) {
       election_deadline: electionInfo.date.toISOString().split('T')[0],
       fundraising_deadline: electionInfo.fundraisingDeadline.toISOString().split('T')[0],
       fundraising_goal: parseInt(state.fundraisingGoal.replace(/,/g, ''), 10),
+      goal_amount: parseInt(state.fundraisingGoal.replace(/,/g, ''), 10),
       campaign_name: state.campaignName,
       description: '',
       candidate_photo_url: state.photoUrl,
