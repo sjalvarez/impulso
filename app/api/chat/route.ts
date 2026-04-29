@@ -14,7 +14,9 @@ export async function POST(request: NextRequest) {
   // Dynamic import — keeps Turbopack from bundling pdf-parse at build time
   let pdfText = '';
   try {
-    const { PDFParse } = await import('pdf-parse');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mod = await (Function('return import("pdf-parse")')() as Promise<any>);
+    const PDFParse = mod.PDFParse ?? mod.default?.PDFParse ?? mod.default;
     const parser = new PDFParse({ url: campaign.campaign_platform_url });
     const result = await parser.getText();
     pdfText = result.text.slice(0, 8000);
