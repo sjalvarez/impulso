@@ -121,15 +121,22 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
   async function handleDonate() {
     if (!finalAmount || !name || !email || !cedula || !cardOk) return;
     setSubmitting(true);
-    const sb = createBrowserSupabaseClient();
-    await sb.from('donations').insert({
-      campaign_id: campaign.id,
-      donor_name: name,
-      donor_email: email,
-      donor_cedula: cedula,
-      amount: finalAmount,
-      is_mock: true,
+    const res = await fetch('/api/donate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        campaign_id: campaign.id,
+        donor_name: name,
+        donor_email: email,
+        donor_cedula: cedula,
+        amount: finalAmount,
+      }),
     });
+    if (!res.ok) {
+      console.error('[donate] failed:', await res.text());
+      setSubmitting(false);
+      return;
+    }
     router.push(`/dona/${campaign.slug}/thank-you?amount=${finalAmount}`);
   }
 
