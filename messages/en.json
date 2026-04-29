@@ -121,6 +121,7 @@
     "cedulaError": "Invalid format. Use 000-0000000-0",
     "partySource": "Source: JCE Dirección de Partidos Políticos, updated February 26, 2026",
     "raceLabel": "Running for",
+    "raceTypePresident": "President (Presidente/a)",
     "raceMayor": "Mayor (Alcalde/a)",
     "raceSenator": "Senator (Senador/a)",
     "raceDeputy": "Deputy (Diputado/a)",

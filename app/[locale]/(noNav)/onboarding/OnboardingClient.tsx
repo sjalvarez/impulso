@@ -54,9 +54,10 @@ interface FormState {
 }
 
 const RACE_LABELS: Record<string, string> = {
-  mayor: 'Alcalde/a',
+  president: 'Presidente/a',
   senator: 'Senador/a',
   deputy: 'Diputado/a',
+  mayor: 'Alcalde/a',
   district_director: 'Director/a Distrital',
 };
 
@@ -250,9 +251,10 @@ function Step1({ state, setState }: { state: FormState; setState: React.Dispatch
           onChange={(e) => update({ raceType: e.target.value })}
         >
           <option value="">Select race type…</option>
-          <option value="mayor">Mayor (Alcalde/a)</option>
+          <option value="president">President (Presidente/a)</option>
           <option value="senator">Senator (Senador/a)</option>
           <option value="deputy">Deputy (Diputado/a)</option>
+          <option value="mayor">Mayor (Alcalde/a)</option>
           <option value="district_director">District Director (Director/a Distrital)</option>
         </select>
       </div>
@@ -655,7 +657,7 @@ function Step4({ state }: { state: FormState }) {
 
   const electionDisplay = state.electionCategory === 'primary'
     ? `Primary · ${electionInfo?.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) ?? ''}`
-    : `${state.raceType === 'mayor' || state.raceType === 'district_director' ? 'Municipal' : 'General'} · ${electionInfo?.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) ?? ''}`;
+    : `${(state.raceType === 'mayor' || state.raceType === 'district_director') ? 'Municipal' : 'General'} · ${electionInfo?.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) ?? ''}`;
 
   function ReviewRow({ label, value, last = false }: { label: string; value: React.ReactNode; last?: boolean }) {
     return (
