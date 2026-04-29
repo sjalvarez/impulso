@@ -57,7 +57,13 @@ export async function POST(request: NextRequest) {
   if (!apiRes.ok) {
     const err = await apiRes.text();
     console.error('[chat] Anthropic error:', apiRes.status, err);
-    return NextResponse.json({ reply: 'Sorry, I could not process that right now.' });
+    let hint = 'Sorry, I could not process that right now.';
+    try {
+      const parsed = JSON.parse(err);
+      if (parsed?.error?.type === 'rate_limit_error') hint = 'Rate limit hit — please try again in a moment.';
+      else if (parsed?.error?.message) hint = `Error: ${parsed.error.message.slice(0, 120)}`;
+    } catch { /* ignore */ }
+    return NextResponse.json({ reply: hint });
   }
 
   const data = await apiRes.json() as { content: Array<{ type: string; text: string }> };

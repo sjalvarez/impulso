@@ -33,13 +33,17 @@ export async function generateCampaignSummary(campaignId: string, locale = 'en')
     return { intro: '', proposals: [], _error: 'No PDF uploaded for this campaign' };
   }
 
-  // Fetch PDF and convert to base64 — send directly to Claude (no pdf-parse needed)
+  // Fetch PDF — cap at 80KB to stay well within Claude's token limits
   let pdfBase64: string;
   try {
     const pdfRes = await fetch(campaign.campaign_platform_url);
     if (!pdfRes.ok) throw new Error(`PDF fetch ${pdfRes.status}`);
     const arrayBuffer = await pdfRes.arrayBuffer();
-    pdfBase64 = Buffer.from(arrayBuffer).toString('base64');
+    const MAX_BYTES = 80 * 1024; // 80KB → ~110KB base64 → ~20k tokens max
+    const slice = arrayBuffer.byteLength > MAX_BYTES
+      ? arrayBuffer.slice(0, MAX_BYTES)
+      : arrayBuffer;
+    pdfBase64 = Buffer.from(slice).toString('base64');
   } catch (e) {
     return { intro: '', proposals: [], _error: `PDF fetch failed: ${e instanceof Error ? e.message : String(e)}` };
   }
