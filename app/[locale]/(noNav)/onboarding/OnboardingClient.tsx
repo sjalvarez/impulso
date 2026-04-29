@@ -363,6 +363,9 @@ function Step2({ state, setState, userId }: { state: FormState; setState: React.
 
   async function uploadFile(file: File, bucket: string, path: string): Promise<string> {
     const sb = createBrowserSupabaseClient();
+    const { data: sessionData } = await sb.auth.getSession();
+    console.log('[upload] session uid:', sessionData?.session?.user?.id ?? 'NO SESSION');
+    if (!sessionData?.session) throw new Error('Not authenticated — please refresh and try again');
     const { data, error } = await sb.storage.from(bucket).upload(path, file, { upsert: true });
     if (error || !data) throw new Error(error?.message ?? 'Upload failed');
     const { data: { publicUrl } } = sb.storage.from(bucket).getPublicUrl(data.path);
