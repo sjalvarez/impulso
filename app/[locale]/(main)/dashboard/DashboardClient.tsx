@@ -347,7 +347,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
             }
             buttonBg="#534AB7"
             buttonText="Preview page →"
-            onButtonClick={() => window.open(`/en/dona/${campaign.slug}`, '_blank')}
+            onButtonClick={() => router.push('/dashboard/preview')}
           />
 
           {/* Card 3 — Outreach */}
