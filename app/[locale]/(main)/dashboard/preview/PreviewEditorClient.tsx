@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
 import { generateCampaignSummary } from '@/app/actions/generate-summary';
 import { generateColorsFromBanner } from '@/app/actions/generate-colors';
@@ -42,6 +42,27 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
 
   // iframe key for refresh
   const [iframeKey, setIframeKey] = useState(0);
+
+  // Auto-generate summary if PDF exists but no summary yet
+  useEffect(() => {
+    if (campaign.campaign_platform_url && !campaign.ai_summary && !introText) {
+      setGeneratingSummary(true);
+      generateCampaignSummary(campaign.id).then(result => {
+        if (result?.intro) setIntroText(result.intro);
+        setGeneratingSummary(false);
+      }).catch(() => setGeneratingSummary(false));
+    }
+    // Auto-generate colors if banner exists but no colors saved
+    if (!campaign.page_primary_color || !campaign.page_accent_color) {
+      setGeneratingColors(true);
+      generateColorsFromBanner(campaign.id).then(({ primary: p, accent: a }) => {
+        setPrimary(p);
+        setAccent(a);
+        setGeneratingColors(false);
+      }).catch(() => setGeneratingColors(false));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSave() {
     setSaving(true);

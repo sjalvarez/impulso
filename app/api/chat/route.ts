@@ -12,13 +12,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ reply: 'Campaign platform document not available yet.' });
   }
 
-  // Fetch and parse PDF
+  // Fetch and parse PDF (pass URL directly — library fetches it)
   let pdfText = '';
   try {
-    const res = await fetch(campaign.campaign_platform_url);
-    const arrayBuffer = await res.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const parser = new PDFParse({ data: new Uint8Array(buffer) });
+    const parser = new PDFParse({ url: campaign.campaign_platform_url });
     const result = await parser.getText();
     pdfText = result.text.slice(0, 8000);
     await parser.destroy();

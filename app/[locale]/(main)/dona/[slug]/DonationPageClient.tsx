@@ -165,7 +165,7 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
         {/* Banner */}
         <div style={{ position: 'relative', width: '100%', height: 160, overflow: 'hidden' }}>
           {campaign.banner_url
-            ? <Image src={campaign.banner_url} alt="Campaign banner" fill style={{ objectFit: 'cover' }} priority />
+            ? <Image src={campaign.banner_url} alt="Campaign banner" fill sizes="100vw" quality={95} style={{ objectFit: 'cover' }} priority />
             : <div style={{ width: '100%', height: '100%', background: `linear-gradient(135deg, ${primary} 0%, ${accent} 100%)` }} />
           }
           {/* Lang toggle */}
@@ -258,11 +258,11 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
               {/* Candidate mini-card */}
               <div style={{ display: 'flex', gap: 10, marginBottom: 14, paddingBottom: 14, borderBottom: '0.5px solid #E8E8E5', alignItems: 'center' }}>
                 {campaign.candidate_photo_url && !photoErr
-                  ? <div style={{ width: 42, height: 42, borderRadius: '50%', overflow: 'hidden', border: `2px solid ${primary}`, flexShrink: 0 }}>
-                      <Image src={campaign.candidate_photo_url} alt={campaign.candidate_name} width={42} height={42} style={{ objectFit: 'cover', objectPosition: 'top' }} onError={() => setPhotoErr(true)} />
+                  ? <div style={{ width: 52, height: 52, borderRadius: '50%', overflow: 'hidden', border: `2px solid ${primary}`, flexShrink: 0 }}>
+                      <Image src={campaign.candidate_photo_url} alt={campaign.candidate_name} width={104} height={104} quality={95} style={{ objectFit: 'cover', objectPosition: 'top', width: '100%', height: '100%' }} onError={() => setPhotoErr(true)} />
                     </div>
-                  : <div style={{ width: 42, height: 42, borderRadius: '50%', background: lightBg, border: `2px solid ${primary}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: primary }}>{getInitials(campaign.candidate_name)}</span>
+                  : <div style={{ width: 52, height: 52, borderRadius: '50%', background: lightBg, border: `2px solid ${primary}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <span style={{ fontSize: 16, fontWeight: 700, color: primary }}>{getInitials(campaign.candidate_name)}</span>
                     </div>
                 }
                 <div>

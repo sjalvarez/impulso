@@ -29,16 +29,10 @@ export async function generateCampaignSummary(campaignId: string) {
 
   if (!campaign?.campaign_platform_url) return null;
 
-  // Fetch PDF
-  const response = await fetch(campaign.campaign_platform_url);
-  if (!response.ok) return null;
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
-  // Extract text using pdf-parse v2
+  // Extract text using pdf-parse v2 (pass URL directly — library fetches it)
   let pdfText = '';
   try {
-    const parser = new PDFParse({ data: new Uint8Array(buffer) });
+    const parser = new PDFParse({ url: campaign.campaign_platform_url });
     const result = await parser.getText();
     pdfText = result.text.slice(0, 8000); // limit context
     await parser.destroy();

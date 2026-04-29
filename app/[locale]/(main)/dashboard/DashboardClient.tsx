@@ -86,7 +86,7 @@ function CandidateAvatar({ url, name }: { url?: string; name: string }) {
 
   return (
     <div style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, marginRight: 16 }}>
-      <Image src={url} alt={name} width={size} height={size} style={{ objectFit: 'cover', objectPosition: 'top', width: '100%', height: '100%' }} onError={() => setErr(true)} />
+      <Image src={url} alt={name} width={size * 2} height={size * 2} quality={95} style={{ objectFit: 'cover', objectPosition: 'top', width: '100%', height: '100%' }} onError={() => setErr(true)} />
     </div>
   );
 }
