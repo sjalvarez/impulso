@@ -9,7 +9,17 @@ export interface Campaign {
   party_affiliation?: string;
   race_type?: string;
   election_type?: string;
+  election_category?: string;
+  election_date_type?: string;
   election_deadline?: string;
+  fundraising_deadline?: string;
+  fundraising_goal?: number;
+  campaign_name?: string;
+  campaign_platform_url?: string;
+  whatsapp?: string;
+  instagram?: string;
+  facebook?: string;
+  twitter?: string;
   phone?: string;
   candidate_photo_url?: string;
   banner_url?: string;

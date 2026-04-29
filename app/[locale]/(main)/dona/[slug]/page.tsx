@@ -1,8 +1,7 @@
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { getDaysUntilElection } from '@/lib/jce-calendar';
+import { getElectionInfo, getDaysUntil, type ElectionCategory, type ElectionDateType } from '@/lib/jce-calendar';
 import type { Campaign } from '@/types';
-import type { ElectionType } from '@/lib/jce-calendar';
 
 interface Props {
   params: Promise<{ locale: string; slug: string }>;
@@ -22,9 +21,10 @@ export default async function DonaPage({ params }: Props) {
   if (!data) notFound();
   const campaign = data as Campaign;
   const goalFmt = new Intl.NumberFormat('es-DO').format(campaign.goal_amount);
-  const electionType = (campaign.election_type ?? 'general') as ElectionType;
+  const electionCategory = (campaign.election_category ?? 'general') as ElectionCategory;
   const raceType = campaign.race_type ?? 'mayor';
-  const daysLeft = getDaysUntilElection(electionType, raceType);
+  const electionInfo = getElectionInfo(electionCategory, raceType);
+  const daysLeft = getDaysUntil(electionInfo.date);
 
   return (
     <div style={{ background: '#FAFAFA', minHeight: '100vh', padding: '40px 24px' }}>
