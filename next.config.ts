@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [{ protocol: 'https', hostname: '**.supabase.co' }],
   },
+  serverExternalPackages: ['pdf-parse', 'node-vibrant'],
 };
 
 export default withNextIntl(nextConfig);
