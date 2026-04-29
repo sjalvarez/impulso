@@ -22,9 +22,7 @@ interface Campaign {
 }
 
 interface Donation {
-  id: string;
   amount: number;
-  created_at: string;
 }
 
 const RACE_LABELS: Record<string, string> = {
@@ -126,7 +124,7 @@ function ActionCard({ iconBg, icon, title, description, teaser, buttonBg, button
     <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={{ background: 'white', border: `0.5px solid ${hover ? 'rgba(0,0,0,0.2)' : '#E8E8E5'}`, borderRadius: 12, padding: 24, display: 'flex', flexDirection: 'column', transition: 'border-color 0.15s' }}
+      style={{ background: 'white', border: `0.5px solid ${hover ? 'rgba(0,0,0,0.2)' : '#E8E8E5'}`, borderRadius: 12, padding: 24, display: 'flex', flexDirection: 'column', transition: 'border-color 0.15s', height: '100%', boxSizing: 'border-box' }}
     >
       <div style={{ width: 40, height: 40, borderRadius: 10, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
         {icon}
@@ -157,7 +155,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       const { data: camp } = await sb.from('campaigns').select('*').eq('user_id', userId).single();
       if (!camp) { router.push('/onboarding'); return; }
       setCampaign(camp);
-      const { data: dons } = await sb.from('donations').select('*').eq('campaign_id', camp.id);
+      const { data: dons } = await sb.from('donations').select('amount').eq('campaign_id', camp.id);
       setDonations(dons ?? []);
       setLoading(false);
     }
@@ -189,7 +187,6 @@ export default function DashboardClient({ userId }: { userId: string }) {
 
   const totalRaised = donations.reduce((s, d) => s + (d.amount ?? 0), 0);
   const donorCount = donations.length;
-  const avgDonation = donorCount > 0 ? Math.round(totalRaised / donorCount) : 0;
   const daysToElection = daysUntil(campaign.election_deadline);
   const daysToFundraising = daysUntil(campaign.fundraising_deadline);
   const donationLink = `impulso.do/dona/${campaign.slug}`;
@@ -306,7 +303,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
         </div>
 
         {/* ── Action cards ───────────────────────────────────── */}
-        <div className="action-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, maxWidth: 740, margin: '0 auto' }}>
+        <div className="action-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, width: '100%', alignItems: 'stretch' }}>
 
           {/* Card 1 — Analytics */}
           <ActionCard
@@ -316,18 +313,14 @@ export default function DashboardClient({ userId }: { userId: string }) {
             description="Track every donation in real time. See who's giving, how much, and export JCE-ready reports."
             teaser={
               <div style={{ background: '#F6F6F4', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
-                {donorCount === 0 ? (
-                  <p style={{ fontSize: 13, fontWeight: 500, color: '#767676', margin: 0, fontFamily: 'inherit' }}>No donations yet — share your link.</p>
-                ) : (
-                  <>
-                    <p style={{ fontSize: 20, fontWeight: 600, color: '#2B2F36', letterSpacing: '-0.03em', margin: 0, fontFamily: 'inherit' }}>
-                      RD${totalRaised.toLocaleString('es-DO')}
-                    </p>
-                    <p style={{ fontSize: 11, color: '#767676', margin: '1px 0 0', fontFamily: 'inherit' }}>
-                      {donorCount} donor{donorCount !== 1 ? 's' : ''} so far
-                    </p>
-                  </>
-                )}
+                <p style={{ fontSize: 20, fontWeight: 600, color: '#2B2F36', letterSpacing: '-0.03em', margin: 0, fontFamily: 'inherit' }}>
+                  RD${totalRaised.toLocaleString('es-DO')}
+                </p>
+                <p style={{ fontSize: 11, color: '#767676', margin: '1px 0 0', fontFamily: 'inherit' }}>
+                  {totalRaised > 0
+                    ? `${donorCount} donor${donorCount !== 1 ? 's' : ''} so far`
+                    : 'No donations yet — share your link to get started'}
+                </p>
               </div>
             }
             buttonBg="#185FA5"
@@ -342,10 +335,16 @@ export default function DashboardClient({ userId }: { userId: string }) {
             title="Preview & edit"
             description="Customize your donation page — edit your proposals, colors, and banner. Preview exactly what donors see."
             teaser={
-              <div style={{ background: '#F6F6F4', borderRadius: 6, height: 64, marginBottom: 14, border: '0.5px solid #E8E8E5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 4 }}>
-                <div style={{ width: 80, height: 3, background: '#C8102E', borderRadius: 2 }} />
-                <div style={{ width: 60, height: 3, background: '#E8E8E5', borderRadius: 2 }} />
-                <div style={{ width: 48, height: 3, background: '#E8E8E5', borderRadius: 2 }} />
+              <div style={{ background: '#F6F6F4', borderRadius: 6, height: 64, marginBottom: 14, border: '0.5px solid #E8E8E5', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '0 16px' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: 16, fontWeight: 700, color: '#2B2F36', margin: 0, letterSpacing: '-0.02em', fontFamily: 'inherit' }}>{donorCount}</p>
+                  <p style={{ fontSize: 9, color: '#767676', margin: 0, fontFamily: 'inherit' }}>donors so far</p>
+                </div>
+                <div style={{ width: 1, height: 28, background: '#E8E8E5' }} />
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: 16, fontWeight: 700, color: '#2B2F36', margin: 0, letterSpacing: '-0.02em', fontFamily: 'inherit' }}>{daysToFundraising ?? '—'}</p>
+                  <p style={{ fontSize: 9, color: '#767676', margin: 0, fontFamily: 'inherit' }}>days left</p>
+                </div>
               </div>
             }
             buttonBg="#534AB7"
