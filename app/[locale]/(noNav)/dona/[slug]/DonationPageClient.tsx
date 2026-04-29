@@ -209,7 +209,7 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
                 {intro.length > 180 && (
                   <span
                     onClick={() => setIntroExpanded(e => !e)}
-                    style={{ color: accent, fontWeight: 500, cursor: 'pointer', textDecoration: 'none', fontSize: 12 }}
+                    style={{ color: '#A0A09A', fontWeight: 400, cursor: 'pointer', textDecoration: 'none', fontSize: 12 }}
                   >
                     {introExpanded ? 'Read less' : 'Read more'}
                   </span>
