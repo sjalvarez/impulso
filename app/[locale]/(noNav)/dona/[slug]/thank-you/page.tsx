@@ -27,10 +27,19 @@ export default async function ThankYouPage({ params, searchParams }: { params: P
           href={`https://wa.me/?text=${shareText}`}
           target="_blank"
           rel="noopener noreferrer"
-          style={{ display: 'inline-block', background: '#25D366', color: 'white', padding: '11px 24px', borderRadius: 6, fontSize: 13, fontWeight: 600, textDecoration: 'none', marginBottom: 24 }}
+          style={{ display: 'inline-block', background: '#25D366', color: 'white', padding: '11px 24px', borderRadius: 6, fontSize: 13, fontWeight: 600, textDecoration: 'none', marginBottom: 12 }}
         >
           Share on WhatsApp
         </a>
+        <div style={{ marginBottom: 24 }}>
+          <a
+            href={`/dona/${campaign.slug}`}
+            style={{ fontSize: 12, color: '#767676', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+            Back to donation page
+          </a>
+        </div>
         <p style={{ fontSize: 10, color: '#767676', margin: 0 }}>Powered by Impulso</p>
       </div>
     </div>
