@@ -128,22 +128,35 @@ Cover EVERYTHING in the document in detail:
 
 Be exhaustive — include every detail from the document. This is the chatbot's only knowledge source, so missing information means the chatbot cannot answer that question. Do not invent anything not explicitly in the document. Write in clear prose organized by topic. Aim for 1000-2000 words.`;
 
-  const [summaryRes, chatbotRes] = await Promise.all([
-    fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', headers,
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6', max_tokens: 1200, system: summarySystem,
-        messages: [{ role: 'user', content: [claudeDoc(pdfBase64), { type: 'text', text: 'Generate the campaign summary from this document.' }] }],
-      }),
+  // ── Step 1: Generate chatbot context from PDF (the heavy call) ───────────────
+  const chatbotRes = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST', headers,
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6', max_tokens: 4000, system: chatbotSystem,
+      messages: [{ role: 'user', content: [claudeDoc(pdfBase64), { type: 'text', text: 'Generate the comprehensive chatbot reference from this document.' }] }],
     }),
-    fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', headers,
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6', max_tokens: 4000, system: chatbotSystem,
-        messages: [{ role: 'user', content: [claudeDoc(pdfBase64), { type: 'text', text: 'Generate the comprehensive chatbot reference from this document.' }] }],
-      }),
+  });
+
+  if (!chatbotRes.ok) {
+    const err = await chatbotRes.text();
+    return { intro: '', proposals: [], _error: `Anthropic error ${chatbotRes.status}: ${err.slice(0, 200)}` };
+  }
+
+  const chatbotData = await chatbotRes.json() as { content: Array<{ type: string; text: string }> };
+  const chatbotContext = chatbotData.content[0]?.type === 'text' ? chatbotData.content[0].text : null;
+  if (!chatbotContext) return { intro: '', proposals: [], _error: 'Claude returned empty chatbot context' };
+
+  // Store chatbot context immediately so it's available even if summary step fails
+  await sb.from('campaigns').update({ chatbot_context: chatbotContext }).eq('id', campaignId);
+
+  // ── Step 2: Generate display summary from the extracted TEXT (no PDF re-upload) ─
+  const summaryRes = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST', headers,
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6', max_tokens: 1200, system: summarySystem,
+      messages: [{ role: 'user', content: `Candidate: ${campaign.candidate_name}\n\nCampaign platform:\n\n${chatbotContext}\n\nGenerate the campaign summary.` }],
     }),
-  ]);
+  });
 
   if (!summaryRes.ok) {
     const err = await summaryRes.text();
@@ -158,16 +171,6 @@ Be exhaustive — include every detail from the document. This is the chatbot's 
   try { summary = JSON.parse(extractJson(raw)); }
   catch { return { intro: '', proposals: [], _error: `JSON parse failed. Claude returned: ${raw.slice(0, 200)}` }; }
 
-  let chatbotContext: string | null = null;
-  if (chatbotRes.ok) {
-    const chatbotData = await chatbotRes.json() as { content: Array<{ type: string; text: string }> };
-    chatbotContext = chatbotData.content[0]?.type === 'text' ? chatbotData.content[0].text : null;
-  }
-
-  await sb.from('campaigns').update({
-    ai_summary: summary,
-    ...(chatbotContext ? { chatbot_context: chatbotContext } : {}),
-  }).eq('id', campaignId);
-
+  await sb.from('campaigns').update({ ai_summary: summary }).eq('id', campaignId);
   return summary;
 }
