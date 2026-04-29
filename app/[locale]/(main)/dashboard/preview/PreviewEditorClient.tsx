@@ -100,13 +100,31 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
     setSummaryError('');
     setGeneratingSummary(true);
 
+    async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number) {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await fetch(url, { ...options, signal: controller.signal });
+      } finally {
+        clearTimeout(id);
+      }
+    }
+
     // Step 1: extract
     setProcessingStep('extracting');
-    const extractRes = await fetch('/api/process-platform', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ step: 'extract', campaignId, locale }),
-    });
+    let extractRes: Response;
+    try {
+      extractRes = await fetchWithTimeout('/api/process-platform', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ step: 'extract', campaignId, locale }),
+      }, 58_000);
+    } catch {
+      setSummaryError('Extraction timed out — PDF may be too large or PDF.co is slow. Try again.');
+      setProcessingStep(null);
+      setGeneratingSummary(false);
+      return;
+    }
     if (!extractRes.ok) {
       const err = await extractRes.json().catch(() => ({ error: 'Unknown error' }));
       setSummaryError(err.error ?? 'Extraction failed');
@@ -117,11 +135,19 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
 
     // Step 2: summarize
     setProcessingStep('summarizing');
-    const summarizeRes = await fetch('/api/process-platform', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ step: 'summarize', campaignId, locale }),
-    });
+    let summarizeRes: Response;
+    try {
+      summarizeRes = await fetchWithTimeout('/api/process-platform', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ step: 'summarize', campaignId, locale }),
+      }, 58_000);
+    } catch {
+      setSummaryError('Summary generation timed out. Try again — it will resume from where it left off.');
+      setProcessingStep(null);
+      setGeneratingSummary(false);
+      return;
+    }
     if (!summarizeRes.ok) {
       const err = await summarizeRes.json().catch(() => ({ error: 'Unknown error' }));
       setSummaryError(err.error ?? 'Summary generation failed');
@@ -140,7 +166,7 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
 
   // Auto-process if PDF exists but no chatbot_context yet (first time or after new PDF)
   useEffect(() => {
-    if (campaign.campaign_platform_url && !campaign.chatbot_context && !campaign.ai_summary) {
+    if (campaign.campaign_platform_url && !campaign.chatbot_context) {
       runProcessPlatform(campaign.id);
     }
     // Auto-generate colors if banner exists but no colors saved
