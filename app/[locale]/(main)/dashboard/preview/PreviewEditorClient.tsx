@@ -41,7 +41,8 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
   const [showScores, setShowScores] = useState(campaign.page_show_scorecards !== false);
   const [showChatbot, setShowChatbot] = useState(campaign.page_show_chatbot !== false);
   const [introText, setIntroText] = useState(campaign.page_intro_override ?? campaign.ai_summary?.intro ?? '');
-  const [saving, setSaving] = useState(false);
+  const [savingAppearance, setSavingAppearance] = useState(false);
+  const [savingContent, setSavingContent] = useState(false);
   const [toast, setToast] = useState(false);
   const [summaryError, setSummaryError] = useState('');
   const [generatingSummary, setGeneratingSummary] = useState(false);
@@ -129,24 +130,32 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, [shareOpen]);
 
-  async function handleSave() {
-    setSaving(true);
+  async function handleSaveAppearance() {
+    setSavingAppearance(true);
     const sb = createBrowserSupabaseClient();
     const updateData: Record<string, unknown> = {
       page_primary_color: primary,
       page_accent_color: accent,
-      page_show_scorecards: showScores,
-      page_show_chatbot: showChatbot,
-      page_intro_override: introText || null,
-      campaign_platform_url: pdfUrl || null,
-      proposal_overrides: proposals,
     };
     if (bannerMode === 'generate' && bannerPhrase) {
       updateData.banner_phrase = bannerPhrase;
       updateData.banner_type = 'generated';
     }
     await sb.from('campaigns').update(updateData).eq('id', campaign.id);
-    setSaving(false);
+    setSavingAppearance(false);
+    setToast(true);
+    setIframeKey(k => k + 1);
+    setTimeout(() => setToast(false), 2000);
+  }
+
+  async function handleSaveContent() {
+    setSavingContent(true);
+    const sb = createBrowserSupabaseClient();
+    await sb.from('campaigns').update({
+      page_intro_override: introText || null,
+      proposal_overrides: proposals,
+    }).eq('id', campaign.id);
+    setSavingContent(false);
     setToast(true);
     setIframeKey(k => k + 1);
     setTimeout(() => setToast(false), 2000);
@@ -440,11 +449,11 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
                     )}
                   </div>
 
-                  {/* Save */}
+                  {/* Save appearance */}
                   <div>
-                    <button onClick={handleSave} disabled={saving}
+                    <button onClick={handleSaveAppearance} disabled={savingAppearance}
                       style={{ width: '100%', height: 36, background: '#2B2F36', color: 'white', border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
-                      {saving ? 'Saving…' : 'Save text & colors'}
+                      {savingAppearance ? 'Saving…' : 'Save appearance'}
                     </button>
                     <p style={{ fontSize: 9, color: '#767676', textAlign: 'center', marginTop: 4, fontFamily: 'inherit' }}>Toggles save automatically</p>
                   </div>
@@ -501,6 +510,14 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
                         </div>
                       ))}
                     </div>
+                  </div>
+
+                  {/* Save content */}
+                  <div>
+                    <button onClick={handleSaveContent} disabled={savingContent}
+                      style={{ width: '100%', height: 36, background: '#2B2F36', color: 'white', border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      {savingContent ? 'Saving…' : 'Save content'}
+                    </button>
                   </div>
 
                   {/* PDF */}

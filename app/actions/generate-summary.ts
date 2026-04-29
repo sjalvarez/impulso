@@ -29,7 +29,7 @@ export async function generateCampaignSummary(campaignId: string, locale = 'en')
 
   const { data: campaign, error: campError } = await sb
     .from('campaigns')
-    .select('campaign_platform_url, candidate_name')
+    .select('campaign_platform_url, candidate_name, chatbot_context')
     .eq('id', campaignId)
     .single();
 
@@ -38,17 +38,6 @@ export async function generateCampaignSummary(campaignId: string, locale = 'en')
   }
   if (!campaign.campaign_platform_url) {
     return { intro: '', proposals: [], _error: 'No PDF uploaded for this campaign' };
-  }
-
-  // Fetch the full PDF — do NOT slice; slicing corrupts the PDF structure and causes 400 errors
-  let pdfBase64: string;
-  try {
-    const pdfRes = await fetch(campaign.campaign_platform_url);
-    if (!pdfRes.ok) throw new Error(`HTTP ${pdfRes.status}`);
-    const arrayBuffer = await pdfRes.arrayBuffer();
-    pdfBase64 = Buffer.from(arrayBuffer).toString('base64');
-  } catch (e) {
-    return { intro: '', proposals: [], _error: `PDF fetch failed: ${e instanceof Error ? e.message : String(e)}` };
   }
 
   const langInstruction = locale === 'es'
@@ -61,13 +50,12 @@ export async function generateCampaignSummary(campaignId: string, locale = 'en')
     'anthropic-version': '2023-06-01',
   };
 
-  // ── Call 1: Short display summary for donation page ──────────────────────────
-  const summarySystem = `You are a campaign assistant. Based ONLY on the campaign platform document provided, generate a very concise summary. ${langInstruction}
+  const summarySystem = `You are a campaign assistant. Based ONLY on the campaign platform information provided, generate a very concise summary. ${langInstruction}
 
 Strict rules:
 - Intro: exactly 2 sentences, maximum 30 words total, maximum 160 characters.
-- Proposals: exactly 3. Each title maximum 4 words. Each description exactly 1 sentence, maximum 18 words. Use specific numbers from the document when available.
-- Never invent or assume anything not explicitly stated in the document.
+- Proposals: exactly 3. Each title maximum 4 words. Each description exactly 1 sentence, maximum 18 words. Use specific numbers when available.
+- Never invent or assume anything not explicitly stated.
 
 Respond with ONLY a raw JSON object — no markdown, no code fences, no explanation. Start your response with { and end with }.
 
@@ -81,7 +69,52 @@ Format:
   ]
 }`;
 
-  // ── Call 2: Comprehensive chatbot context ─────────────────────────────────────
+  const existingContext = campaign.chatbot_context as string | null;
+
+  // ── Fast path: chatbot_context already exists — skip PDF, just regenerate display summary ──
+  if (existingContext) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1200,
+        system: summarySystem,
+        messages: [{
+          role: 'user',
+          content: `Candidate: ${campaign.candidate_name}\n\nCampaign platform:\n\n${existingContext}\n\nGenerate the campaign summary.`,
+        }],
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      return { intro: '', proposals: [], _error: `Anthropic error ${res.status}: ${err.slice(0, 200)}` };
+    }
+
+    const data = await res.json() as { content: Array<{ type: string; text: string }> };
+    const raw = data.content[0]?.type === 'text' ? data.content[0].text : '';
+    if (!raw) return { intro: '', proposals: [], _error: 'Claude returned empty response' };
+
+    let summary = null;
+    try { summary = JSON.parse(extractJson(raw)); }
+    catch { return { intro: '', proposals: [], _error: `JSON parse failed. Claude returned: ${raw.slice(0, 200)}` }; }
+
+    await sb.from('campaigns').update({ ai_summary: summary }).eq('id', campaignId);
+    return summary;
+  }
+
+  // ── Slow path: no context yet — fetch PDF and run both calls in parallel ──────
+  let pdfBase64: string;
+  try {
+    const pdfRes = await fetch(campaign.campaign_platform_url!);
+    if (!pdfRes.ok) throw new Error(`HTTP ${pdfRes.status}`);
+    const arrayBuffer = await pdfRes.arrayBuffer();
+    pdfBase64 = Buffer.from(arrayBuffer).toString('base64');
+  } catch (e) {
+    return { intro: '', proposals: [], _error: `PDF fetch failed: ${e instanceof Error ? e.message : String(e)}` };
+  }
+
   const chatbotSystem = `You are a campaign analyst. Read the full campaign platform document and produce a comprehensive reference that a chatbot can use to answer any question a donor might ask. ${langInstruction}
 
 Cover ALL of the following that appear in the document:
@@ -94,38 +127,19 @@ Cover ALL of the following that appear in the document:
 
 Write in clear prose, organized by topic. Be thorough — this is the chatbot's only reference. Do not invent anything not in the document. Aim for 400-800 words.`;
 
-  // Run both calls in parallel
   const [summaryRes, chatbotRes] = await Promise.all([
     fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
+      method: 'POST', headers,
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1200,
-        system: summarySystem,
-        messages: [{
-          role: 'user',
-          content: [
-            claudeDoc(pdfBase64),
-            { type: 'text', text: 'Generate the campaign summary from this document.' },
-          ],
-        }],
+        model: 'claude-sonnet-4-6', max_tokens: 1200, system: summarySystem,
+        messages: [{ role: 'user', content: [claudeDoc(pdfBase64), { type: 'text', text: 'Generate the campaign summary from this document.' }] }],
       }),
     }),
     fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers,
+      method: 'POST', headers,
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
-        system: chatbotSystem,
-        messages: [{
-          role: 'user',
-          content: [
-            claudeDoc(pdfBase64),
-            { type: 'text', text: 'Generate the comprehensive chatbot reference from this document.' },
-          ],
-        }],
+        model: 'claude-sonnet-4-6', max_tokens: 2000, system: chatbotSystem,
+        messages: [{ role: 'user', content: [claudeDoc(pdfBase64), { type: 'text', text: 'Generate the comprehensive chatbot reference from this document.' }] }],
       }),
     }),
   ]);
@@ -140,13 +154,9 @@ Write in clear prose, organized by topic. Be thorough — this is the chatbot's 
   if (!raw) return { intro: '', proposals: [], _error: 'Claude returned empty response' };
 
   let summary = null;
-  try {
-    summary = JSON.parse(extractJson(raw));
-  } catch {
-    return { intro: '', proposals: [], _error: `JSON parse failed. Claude returned: ${raw.slice(0, 200)}` };
-  }
+  try { summary = JSON.parse(extractJson(raw)); }
+  catch { return { intro: '', proposals: [], _error: `JSON parse failed. Claude returned: ${raw.slice(0, 200)}` }; }
 
-  // Store chatbot context if the second call succeeded (non-blocking — don't fail summary on this)
   let chatbotContext: string | null = null;
   if (chatbotRes.ok) {
     const chatbotData = await chatbotRes.json() as { content: Array<{ type: string; text: string }> };
