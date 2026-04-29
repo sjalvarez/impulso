@@ -4,7 +4,6 @@ import { createClient } from '@supabase/supabase-js';
 export async function POST(request: NextRequest) {
   const { message, campaignId } = await request.json();
 
-  // Service role — works for unauthenticated donors
   const sb = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -25,50 +24,44 @@ export async function POST(request: NextRequest) {
     ? `If the answer is not in the information provided, say: "I don't have that information — please contact the campaign directly on WhatsApp: ${whatsapp}."`
     : `If the answer is not in the information provided, say: "I don't have that information — please reach out to the campaign directly."`;
 
-  // Build context from whatever we have
-  let context = `Candidate: ${campaign.candidate_name}\nRunning for: ${campaign.race_type ?? 'office'}\nParty: ${campaign.party_affiliation ?? 'unknown'}\n`;
+  const systemPrompt = `You are a helpful campaign assistant for ${campaign.candidate_name}. Answer questions about their campaign using ONLY the information provided. Keep answers concise (2-4 sentences). ${contactLine} Do not invent anything not stated in the provided materials.`;
 
-  // Add AI summary if available
-  const summary = campaign.ai_summary as { intro?: string; proposals?: { title: string; description: string }[] } | null;
-  if (summary?.intro) context += `\nCampaign intro: ${summary.intro}\n`;
+  // Build user content — PDF document if available, otherwise text summary
+  type ContentBlock =
+    | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
+    | { type: 'text'; text: string };
 
-  const proposals = (campaign.proposal_overrides as { title: string; description: string }[] | null)
-    ?? summary?.proposals;
-  if (proposals?.length) {
-    context += '\nKey proposals:\n';
-    proposals.forEach((p: { title: string; description: string }, i: number) => {
-      context += `${i + 1}. ${p.title}: ${p.description}\n`;
-    });
-  }
+  const content: ContentBlock[] = [];
 
-  // Fetch PDF bytes manually and parse — passing URL directly is unreliable in Vercel serverless
   if (campaign.campaign_platform_url) {
     try {
       const pdfRes = await fetch(campaign.campaign_platform_url);
-      if (!pdfRes.ok) throw new Error(`PDF fetch failed: ${pdfRes.status}`);
+      if (!pdfRes.ok) throw new Error(`${pdfRes.status}`);
       const arrayBuffer = await pdfRes.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mod = await (Function('return import("pdf-parse")')() as Promise<any>);
-      const PDFParse = mod.PDFParse ?? mod.default?.PDFParse ?? mod.default;
-      const parser = new PDFParse({ data: new Uint8Array(buffer) });
-      const result = await parser.getText();
-      const pdfText = result.text.slice(0, 7000);
-      await parser.destroy();
-      if (pdfText.trim()) {
-        // PDF ingested — replace the summary context with the full document
-        context = `Candidate: ${campaign.candidate_name}\nRunning for: ${campaign.race_type ?? 'office'}\nParty: ${campaign.party_affiliation ?? 'unknown'}\n\nFull campaign platform document:\n${pdfText}`;
-      }
+      const pdfBase64 = Buffer.from(arrayBuffer).toString('base64');
+      content.push({
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 },
+      });
     } catch (e) {
-      console.error('[chat] PDF parse failed, falling back to summary:', e);
-      // summary context already built above, carry on
+      console.error('[chat] PDF fetch failed, falling back to summary:', e);
     }
   }
 
-  const systemPrompt = `You are a helpful campaign assistant for ${campaign.candidate_name}. Answer questions about their campaign using ONLY the information below. Keep answers concise (2-4 sentences). ${contactLine} Do not invent anything not stated below.
+  // Always add summary context as text (fallback or supplement)
+  if (content.length === 0) {
+    const summary = campaign.ai_summary as { intro?: string; proposals?: { title: string; description: string }[] } | null;
+    const proposals = (campaign.proposal_overrides as { title: string; description: string }[] | null) ?? summary?.proposals;
+    let ctx = `Candidate: ${campaign.candidate_name}\nRunning for: ${campaign.race_type ?? 'office'}\nParty: ${campaign.party_affiliation ?? 'unknown'}\n`;
+    if (summary?.intro) ctx += `\nCampaign intro: ${summary.intro}\n`;
+    if (proposals?.length) {
+      ctx += '\nKey proposals:\n';
+      proposals.forEach((p, i) => { ctx += `${i + 1}. ${p.title}: ${p.description}\n`; });
+    }
+    content.push({ type: 'text', text: ctx });
+  }
 
-CAMPAIGN INFORMATION:
-${context}`;
+  content.push({ type: 'text', text: message });
 
   const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -81,7 +74,7 @@ ${context}`;
       model: 'claude-sonnet-4-6',
       max_tokens: 300,
       system: systemPrompt,
-      messages: [{ role: 'user', content: message }],
+      messages: [{ role: 'user', content }],
     }),
   });
 
@@ -90,7 +83,6 @@ ${context}`;
   }
 
   const data = await apiRes.json() as { content: Array<{ type: string; text: string }> };
-  const block = data.content[0];
-  const reply = block?.type === 'text' ? block.text : 'Sorry, I could not process that right now.';
+  const reply = data.content[0]?.type === 'text' ? data.content[0].text : 'Sorry, I could not process that right now.';
   return NextResponse.json({ reply });
 }

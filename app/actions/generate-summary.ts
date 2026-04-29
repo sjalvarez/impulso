@@ -1,30 +1,6 @@
 'use server';
 import { createClient } from '@supabase/supabase-js';
 
-async function callClaude(system: string, userContent: string, maxTokens: number): Promise<string> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY!,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: 'user', content: userContent }],
-    }),
-  });
-  if (!res.ok) {
-    console.error('[generate-summary] Anthropic error:', res.status, await res.text());
-    return '';
-  }
-  const data = await res.json() as { content: Array<{ type: string; text: string }> };
-  const block = data.content[0];
-  return block?.type === 'text' ? block.text : '';
-}
-
 function extractJson(raw: string): string {
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced) return fenced[1].trim();
@@ -39,7 +15,6 @@ export async function generateCampaignSummary(campaignId: string): Promise<{
   proposals: { title: string; description: string }[];
   _error?: string;
 } | null> {
-  // Service role — bypasses RLS so server actions always have read/write access
   const sb = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -58,27 +33,15 @@ export async function generateCampaignSummary(campaignId: string): Promise<{
     return { intro: '', proposals: [], _error: 'No PDF uploaded for this campaign' };
   }
 
-  // Fetch PDF bytes ourselves — more reliable than passing URL to pdf-parse in serverless
-  let pdfText = '';
+  // Fetch PDF and convert to base64 — send directly to Claude (no pdf-parse needed)
+  let pdfBase64: string;
   try {
     const pdfRes = await fetch(campaign.campaign_platform_url);
     if (!pdfRes.ok) throw new Error(`PDF fetch ${pdfRes.status}`);
     const arrayBuffer = await pdfRes.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mod = await (Function('return import("pdf-parse")')() as Promise<any>);
-    const PDFParse = mod.PDFParse ?? mod.default?.PDFParse ?? mod.default;
-    const parser = new PDFParse({ data: new Uint8Array(buffer) });
-    const result = await parser.getText();
-    pdfText = result.text.slice(0, 8000);
-    await parser.destroy();
+    pdfBase64 = Buffer.from(arrayBuffer).toString('base64');
   } catch (e) {
-    return { intro: '', proposals: [], _error: `PDF parse failed: ${e instanceof Error ? e.message : String(e)}` };
-  }
-
-  if (!pdfText.trim()) {
-    return { intro: '', proposals: [], _error: 'PDF has no readable text (may be a scanned image)' };
+    return { intro: '', proposals: [], _error: `PDF fetch failed: ${e instanceof Error ? e.message : String(e)}` };
   }
 
   const system = `You are a campaign assistant. Based ONLY on the campaign platform document provided, generate a very concise summary.
@@ -100,24 +63,46 @@ Format:
   ]
 }`;
 
-  const raw = await callClaude(system, `Campaign platform document:\n\n${pdfText}`, 1200);
-  if (!raw) return null;
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_API_KEY!,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1200,
+      system,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 },
+          },
+          { type: 'text', text: 'Generate the campaign summary from this document.' },
+        ],
+      }],
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    return { intro: '', proposals: [], _error: `Anthropic error ${res.status}: ${err.slice(0, 200)}` };
+  }
+
+  const data = await res.json() as { content: Array<{ type: string; text: string }> };
+  const raw = data.content[0]?.type === 'text' ? data.content[0].text : '';
+  if (!raw) return { intro: '', proposals: [], _error: 'Claude returned empty response' };
 
   let summary = null;
   try {
     summary = JSON.parse(extractJson(raw));
-  } catch (e) {
+  } catch {
     return { intro: '', proposals: [], _error: `JSON parse failed. Claude returned: ${raw.slice(0, 200)}` };
   }
 
-  const { error: updateError } = await sb
-    .from('campaigns')
-    .update({ ai_summary: summary })
-    .eq('id', campaignId);
-
-  if (updateError) {
-    console.error('[generate-summary] Supabase update error:', updateError.message);
-  }
-
+  await sb.from('campaigns').update({ ai_summary: summary }).eq('id', campaignId);
   return summary;
 }
