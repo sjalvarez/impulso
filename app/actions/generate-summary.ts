@@ -10,7 +10,7 @@ function extractJson(raw: string): string {
   return raw.trim();
 }
 
-export async function generateCampaignSummary(campaignId: string): Promise<{
+export async function generateCampaignSummary(campaignId: string, locale = 'en'): Promise<{
   intro: string;
   proposals: { title: string; description: string }[];
   _error?: string;
@@ -44,7 +44,11 @@ export async function generateCampaignSummary(campaignId: string): Promise<{
     return { intro: '', proposals: [], _error: `PDF fetch failed: ${e instanceof Error ? e.message : String(e)}` };
   }
 
-  const system = `You are a campaign assistant. Based ONLY on the campaign platform document provided, generate a very concise summary.
+  const langInstruction = locale === 'es'
+    ? 'Respond in Spanish.'
+    : 'Respond in English, regardless of the language of the document.';
+
+  const system = `You are a campaign assistant. Based ONLY on the campaign platform document provided, generate a very concise summary. ${langInstruction}
 
 Strict rules:
 - Intro: exactly 2 sentences, maximum 30 words total, maximum 160 characters.

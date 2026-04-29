@@ -99,8 +99,6 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
   const showScores = campaign.page_show_scorecards !== false;
   const showChatbot = campaign.page_show_chatbot !== false;
 
-  // Suppress unused locale warning — kept for future i18n use
-  void locale;
 
   function selectAmount(amt: number) {
     setSelectedAmount(amt);
@@ -144,7 +142,7 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg, campaignId: campaign.id }),
+        body: JSON.stringify({ message: msg, campaignId: campaign.id, locale }),
       });
       const { reply } = await res.json();
       setMessages(m => [...m, { role: 'bot', text: reply }]);

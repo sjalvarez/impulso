@@ -11,5 +11,5 @@ export default async function PreviewPage({ params }: { params: Promise<{ locale
   if (!user) redirect(`/${locale}/auth/login`);
   const { data: campaign } = await sb.from('campaigns').select('*').eq('user_id', user.id).single();
   if (!campaign) redirect(`/${locale}/onboarding`);
-  return <PreviewEditorClient campaign={campaign} userId={user.id} />;
+  return <PreviewEditorClient campaign={campaign} userId={user.id} locale={locale} />;
 }

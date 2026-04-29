@@ -23,7 +23,7 @@ interface Campaign {
   party_affiliation?: string;
 }
 
-interface Props { campaign: Campaign; userId: string; }
+interface Props { campaign: Campaign; userId: string; locale?: string; }
 
 function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return (
@@ -33,7 +33,7 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   );
 }
 
-export default function PreviewEditorClient({ campaign, userId }: Props) {
+export default function PreviewEditorClient({ campaign, userId, locale = 'en' }: Props) {
   const router = useRouter();
 
   const [primary, setPrimary] = useState(campaign.page_primary_color ?? '#0D2B6B');
@@ -80,7 +80,7 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
     if (campaign.campaign_platform_url && !campaign.ai_summary && !introText) {
       setGeneratingSummary(true);
       setSummaryError('');
-      generateCampaignSummary(campaign.id).then(result => {
+      generateCampaignSummary(campaign.id, locale).then(result => {
         if (result?._error) { setSummaryError(result._error); } else if (result?.intro) {
           setIntroText(result.intro);
         } else {
@@ -156,7 +156,7 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
     setGeneratingSummary(true);
     setSummaryError('');
     try {
-      const result = await generateCampaignSummary(campaign.id);
+      const result = await generateCampaignSummary(campaign.id, locale);
       if (result?._error) { setSummaryError(result._error); } else if (result?.intro) {
         setIntroText(result.intro);
       } else {
@@ -185,7 +185,7 @@ export default function PreviewEditorClient({ campaign, userId }: Props) {
       await (await import('@/lib/supabase/browser')).createBrowserSupabaseClient()
         .from('campaigns').update({ campaign_platform_url: json.url }).eq('id', campaign.id);
       setGeneratingSummary(true);
-      const result = await generateCampaignSummary(campaign.id);
+      const result = await generateCampaignSummary(campaign.id, locale);
       if (result?.intro) setIntroText(result.intro);
       setGeneratingSummary(false);
     }
