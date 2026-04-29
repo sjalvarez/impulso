@@ -374,8 +374,8 @@ function Step2({ state, setState, userId }: { state: FormState; setState: React.
     try {
       const url = await uploadFile(file, 'campaign-assets', `${userId}/platform-${Date.now()}.pdf`);
       update({ pdfUrl: url, pdfUploading: false });
-    } catch {
-      alert('PDF upload failed. Please try again.');
+    } catch (e: unknown) {
+      alert('PDF upload failed: ' + (e instanceof Error ? e.message : String(e)));
       update({ pdfUploading: false });
     }
   }
@@ -462,9 +462,9 @@ function Step2({ state, setState, userId }: { state: FormState; setState: React.
         </p>
         <FileDropArea
           accept=".pdf"
-          maxMB={10}
+          maxMB={5}
           dragText="Drag & drop your PDF here, or click to browse"
-          maxSizeLabel="PDF only · Max 10MB"
+          maxSizeLabel="PDF only · Max 5MB"
           fileName={state.pdfFile?.name}
           uploading={state.pdfUploading}
           uploaded={state.pdfUrl !== ''}
