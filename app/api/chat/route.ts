@@ -41,19 +41,27 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // Try to enrich with PDF text if available
+  // Fetch PDF bytes manually and parse — passing URL directly is unreliable in Vercel serverless
   if (campaign.campaign_platform_url) {
     try {
+      const pdfRes = await fetch(campaign.campaign_platform_url);
+      if (!pdfRes.ok) throw new Error(`PDF fetch failed: ${pdfRes.status}`);
+      const arrayBuffer = await pdfRes.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mod = await (Function('return import("pdf-parse")')() as Promise<any>);
       const PDFParse = mod.PDFParse ?? mod.default?.PDFParse ?? mod.default;
-      const parser = new PDFParse({ url: campaign.campaign_platform_url });
+      const parser = new PDFParse({ data: new Uint8Array(buffer) });
       const result = await parser.getText();
       const pdfText = result.text.slice(0, 7000);
       await parser.destroy();
-      if (pdfText.trim()) context += `\nFull platform document:\n${pdfText}`;
-    } catch {
-      // PDF failed — we still have summary context above, carry on
+      if (pdfText.trim()) {
+        // PDF ingested — replace the summary context with the full document
+        context = `Candidate: ${campaign.candidate_name}\nRunning for: ${campaign.race_type ?? 'office'}\nParty: ${campaign.party_affiliation ?? 'unknown'}\n\nFull campaign platform document:\n${pdfText}`;
+      }
+    } catch (e) {
+      console.error('[chat] PDF parse failed, falling back to summary:', e);
+      // summary context already built above, carry on
     }
   }
 
