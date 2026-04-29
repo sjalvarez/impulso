@@ -11,7 +11,9 @@ export async function generateColorsFromBanner(campaignId: string): Promise<{ pr
   if (campaign?.banner_url) {
     try {
       // Dynamic import — keeps Turbopack from trying to bundle this at build time
-      const { Vibrant } = await import('node-vibrant/node');
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      const { Vibrant } = await import('node-vibrant') as { Vibrant: { new(src: string): { getPalette(): Promise<Record<string, { hex: string } | null>> } } };
       const v = new Vibrant(campaign.banner_url);
       const palette = await v.getPalette();
       if (palette.DarkVibrant?.hex) primary = palette.DarkVibrant.hex;
