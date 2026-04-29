@@ -1,5 +1,4 @@
 'use server';
-import { PDFParse } from 'pdf-parse';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 async function callClaude(system: string, userContent: string, maxTokens: number): Promise<string> {
@@ -58,9 +57,10 @@ export async function generateCampaignSummary(campaignId: string): Promise<{
     return null;
   }
 
-  // Extract text using pdf-parse v2 (pass URL directly — library fetches it)
+  // Extract text — dynamic import keeps Turbopack from bundling pdf-parse at build time
   let pdfText = '';
   try {
+    const { PDFParse } = await import('pdf-parse');
     const parser = new PDFParse({ url: campaign.campaign_platform_url });
     const result = await parser.getText();
     pdfText = result.text.slice(0, 8000);

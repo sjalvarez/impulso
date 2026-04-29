@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PDFParse } from 'pdf-parse';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
@@ -12,9 +11,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ reply: 'Campaign platform document not available yet.' });
   }
 
-  // Fetch and parse PDF (pass URL directly — library fetches it)
+  // Dynamic import — keeps Turbopack from bundling pdf-parse at build time
   let pdfText = '';
   try {
+    const { PDFParse } = await import('pdf-parse');
     const parser = new PDFParse({ url: campaign.campaign_platform_url });
     const result = await parser.getText();
     pdfText = result.text.slice(0, 8000);

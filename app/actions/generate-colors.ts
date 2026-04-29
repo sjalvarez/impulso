@@ -1,5 +1,4 @@
 'use server';
-import { Vibrant } from 'node-vibrant/node';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export async function generateColorsFromBanner(campaignId: string): Promise<{ primary: string; accent: string }> {
@@ -11,6 +10,8 @@ export async function generateColorsFromBanner(campaignId: string): Promise<{ pr
 
   if (campaign?.banner_url) {
     try {
+      // Dynamic import — keeps Turbopack from trying to bundle this at build time
+      const { Vibrant } = await import('node-vibrant/node');
       const v = new Vibrant(campaign.banner_url);
       const palette = await v.getPalette();
       if (palette.DarkVibrant?.hex) primary = palette.DarkVibrant.hex;
