@@ -9,6 +9,8 @@ interface Campaign {
   candidate_name: string;
   slug: string;
   banner_url?: string;
+  banner_phrase?: string;
+  banner_type?: string;
   candidate_photo_url?: string;
   party_affiliation?: string;
   race_type?: string;
@@ -165,9 +167,15 @@ export default function DonationPageClient({ campaign, donorCount, primary, acce
       <div style={{ minHeight: '100vh', background: '#FAFAFA', fontFamily: "'Sora', sans-serif" }}>
         {/* Banner */}
         <div style={{ position: 'relative', width: '100%', height: 160, overflow: 'hidden' }}>
-          {campaign.banner_url
+          {campaign.banner_url && campaign.banner_type !== 'generated'
             ? <Image src={campaign.banner_url} alt="Campaign banner" fill sizes="100vw" quality={95} style={{ objectFit: 'cover' }} priority />
-            : <div style={{ width: '100%', height: '100%', background: `linear-gradient(135deg, ${primary} 0%, ${accent} 100%)` }} />
+            : <div style={{ width: '100%', height: '100%', background: `linear-gradient(135deg, ${primary} 0%, ${accent} 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {campaign.banner_phrase && (
+                  <p style={{ fontSize: 22, fontWeight: 700, color: 'white', letterSpacing: '-0.02em', textAlign: 'center', padding: '0 24px', margin: 0, textShadow: '0 1px 4px rgba(0,0,0,0.25)', fontFamily: "'Sora', sans-serif" }}>
+                    {campaign.banner_phrase}
+                  </p>
+                )}
+              </div>
           }
           {/* Lang toggle */}
           <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 10 }}>
