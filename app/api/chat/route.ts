@@ -9,11 +9,18 @@ export async function POST(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
-  const { data: campaign } = await sb.from('campaigns').select('candidate_name, whatsapp, campaign_platform_url').eq('id', campaignId).single();
+  const { data: campaign, error: dbError } = await sb.from('campaigns').select('candidate_name, whatsapp, campaign_platform_url').eq('id', campaignId).single();
+
+  console.log('[chat] campaignId:', campaignId);
+  console.log('[chat] campaign:', campaign);
+  console.log('[chat] dbError:', dbError?.message);
 
   if (!campaign?.campaign_platform_url) {
+    console.log('[chat] no campaign_platform_url — returning fallback');
     return NextResponse.json({ reply: 'Campaign platform document not available yet.' });
   }
+
+  console.log('[chat] pdf url:', campaign.campaign_platform_url);
 
   // Dynamic import — keeps Turbopack from bundling pdf-parse at build time
   let pdfText = '';
@@ -25,7 +32,8 @@ export async function POST(request: NextRequest) {
     const result = await parser.getText();
     pdfText = result.text.slice(0, 8000);
     await parser.destroy();
-  } catch {
+  } catch (e) {
+    console.error('[chat] PDF parse failed:', e);
     return NextResponse.json({ reply: 'Campaign platform document not available yet.' });
   }
 
