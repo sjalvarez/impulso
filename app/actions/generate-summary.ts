@@ -77,9 +77,12 @@ export async function generateCampaignSummary(campaignId: string): Promise<{
     return null;
   }
 
-  const system = `You are a campaign assistant. Based ONLY on the campaign platform document provided, generate:
-1. A short intro paragraph (2-3 sentences, warm and direct, written as if introducing the candidate to a donor)
-2. Exactly 3 key proposals (each with a short title max 5 words, and a description max 2 sentences)
+  const system = `You are a campaign assistant. Based ONLY on the campaign platform document provided, generate a very concise summary.
+
+Strict rules:
+- Intro: exactly 2 sentences, maximum 35 words total. Warm and direct tone.
+- Proposals: exactly 3. Each title maximum 4 words. Each description exactly 1 sentence, maximum 18 words. Use specific numbers from the document when available.
+- Never invent or assume anything not explicitly stated in the document.
 
 Respond with ONLY a raw JSON object — no markdown, no code fences, no explanation. Start your response with { and end with }.
 
@@ -91,9 +94,7 @@ Format:
     { "title": "...", "description": "..." },
     { "title": "...", "description": "..." }
   ]
-}
-
-Never invent facts not present in the document.`;
+}`;
 
   const raw = await callClaude(system, `Campaign platform document:\n\n${pdfText}`, 1200);
   if (!raw) return null;
