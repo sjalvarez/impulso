@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from '@/lib/i18n/navigation';
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser';
-import { generateCampaignSummary } from '@/app/actions/generate-summary';
 import { generateColorsFromBanner } from '@/app/actions/generate-colors';
 import { generateBannerPhrase } from '@/app/actions/generate-banner-phrase';
 
@@ -21,6 +20,8 @@ interface Campaign {
   banner_phrase?: string;
   race_type?: string;
   party_affiliation?: string;
+  chatbot_context?: string | null;
+  processing_status?: string | null;
 }
 
 interface Props { campaign: Campaign; userId: string; locale?: string; }
@@ -46,6 +47,11 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
   const [toast, setToast] = useState(false);
   const [summaryError, setSummaryError] = useState('');
   const [generatingSummary, setGeneratingSummary] = useState(false);
+  const [processingStep, setProcessingStep] = useState<'extracting' | 'summarizing' | null>(
+    campaign.processing_status === 'extracting' ? 'extracting'
+    : campaign.processing_status === 'summarizing' ? 'summarizing'
+    : null
+  );
   const [generatingColors, setGeneratingColors] = useState(false);
   const [pdfUploading, setPdfUploading] = useState(false);
   const [pdfUrl, setPdfUrl] = useState(campaign.campaign_platform_url ?? '');
@@ -76,22 +82,66 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
   // Toggle error
   const [toggleError, setToggleError] = useState('');
 
-  // Auto-generate summary if PDF exists but no summary yet
+  async function getAuthToken(): Promise<string | null> {
+    const sb = createBrowserSupabaseClient();
+    const { data } = await sb.auth.getSession();
+    return data.session?.access_token ?? null;
+  }
+
+  async function runProcessPlatform(campaignId: string, opts?: { clearFirst?: boolean }) {
+    const token = await getAuthToken();
+    if (!token) { setSummaryError('Not authenticated'); return; }
+
+    if (opts?.clearFirst) {
+      const sb = createBrowserSupabaseClient();
+      await sb.from('campaigns').update({ platform_text: null, chatbot_context: null }).eq('id', campaignId);
+    }
+
+    setSummaryError('');
+    setGeneratingSummary(true);
+
+    // Step 1: extract
+    setProcessingStep('extracting');
+    const extractRes = await fetch('/api/process-platform', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ step: 'extract', campaignId, locale }),
+    });
+    if (!extractRes.ok) {
+      const err = await extractRes.json().catch(() => ({ error: 'Unknown error' }));
+      setSummaryError(err.error ?? 'Extraction failed');
+      setProcessingStep(null);
+      setGeneratingSummary(false);
+      return;
+    }
+
+    // Step 2: summarize
+    setProcessingStep('summarizing');
+    const summarizeRes = await fetch('/api/process-platform', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ step: 'summarize', campaignId, locale }),
+    });
+    if (!summarizeRes.ok) {
+      const err = await summarizeRes.json().catch(() => ({ error: 'Unknown error' }));
+      setSummaryError(err.error ?? 'Summary generation failed');
+      setProcessingStep(null);
+      setGeneratingSummary(false);
+      return;
+    }
+
+    const { summary } = await summarizeRes.json();
+    if (summary?.intro) setIntroText(summary.intro);
+    if (summary?.proposals) setProposals(summary.proposals);
+    setProcessingStep(null);
+    setGeneratingSummary(false);
+    setIframeKey(k => k + 1);
+  }
+
+  // Auto-process if PDF exists but no chatbot_context yet (first time or after new PDF)
   useEffect(() => {
-    if (campaign.campaign_platform_url && !campaign.ai_summary && !introText) {
-      setGeneratingSummary(true);
-      setSummaryError('');
-      generateCampaignSummary(campaign.id, locale).then(result => {
-        if (result?._error) { setSummaryError(result._error); } else if (result?.intro) {
-          setIntroText(result.intro);
-        } else {
-          setSummaryError('Could not generate summary — check that your PDF has readable text.');
-        }
-        setGeneratingSummary(false);
-      }).catch((e) => {
-        setSummaryError(`Error: ${e?.message ?? 'Unknown error'}`);
-        setGeneratingSummary(false);
-      });
+    if (campaign.campaign_platform_url && !campaign.chatbot_context && !campaign.ai_summary) {
+      runProcessPlatform(campaign.id);
     }
     // Auto-generate colors if banner exists but no colors saved
     if (!campaign.page_primary_color || !campaign.page_accent_color) {
@@ -162,27 +212,13 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
   }
 
   async function handleGenerateSummary() {
-    setGeneratingSummary(true);
-    setSummaryError('');
-    try {
-      const result = await generateCampaignSummary(campaign.id, locale);
-      if (result?._error) { setSummaryError(result._error); } else if (result?.intro) {
-        setIntroText(result.intro);
-      } else {
-        setSummaryError('Could not generate summary — check that your PDF has readable text.');
-      }
-    } catch (e: unknown) {
-      setSummaryError(`Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
-    }
-    setGeneratingSummary(false);
+    await runProcessPlatform(campaign.id);
   }
 
   async function handlePdfUpload(file: File) {
     setPdfUploading(true);
-    const sb = createBrowserSupabaseClient();
-    const { data: sessionData } = await sb.auth.getSession();
-    if (!sessionData?.session) { setPdfUploading(false); return; }
-    const token = sessionData.session.access_token;
+    const token = await getAuthToken();
+    if (!token) { setPdfUploading(false); return; }
     const formData = new FormData();
     formData.append('file', file);
     formData.append('bucket', 'campaign-assets');
@@ -191,14 +227,14 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
     const json = await res.json();
     if (json.url) {
       setPdfUrl(json.url);
-      await (await import('@/lib/supabase/browser')).createBrowserSupabaseClient()
-        .from('campaigns').update({ campaign_platform_url: json.url }).eq('id', campaign.id);
-      setGeneratingSummary(true);
-      const result = await generateCampaignSummary(campaign.id, locale);
-      if (result?.intro) setIntroText(result.intro);
-      setGeneratingSummary(false);
+      const sb = createBrowserSupabaseClient();
+      await sb.from('campaigns').update({ campaign_platform_url: json.url }).eq('id', campaign.id);
+      setPdfUploading(false);
+      // New PDF — clear stale extracted text so we re-extract from scratch
+      await runProcessPlatform(campaign.id, { clearFirst: true });
+    } else {
+      setPdfUploading(false);
     }
-    setPdfUploading(false);
   }
 
   async function handleToggle(field: 'page_show_scorecards' | 'page_show_chatbot', currentValue: boolean) {
@@ -252,6 +288,18 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
       `}</style>
 
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 24px', fontFamily: "'Sora', sans-serif" }}>
+
+        {/* Processing banner */}
+        {processingStep && (
+          <div style={{ background: '#FFF8E7', border: '0.5px solid #F5C842', borderRadius: 8, padding: '10px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B07D00" strokeWidth="2" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            <p style={{ margin: 0, fontSize: 12, color: '#6B4F00', fontFamily: 'inherit' }}>
+              {processingStep === 'extracting'
+                ? 'Extracting document text — this may take up to a minute for large PDFs…'
+                : 'Generating comprehensive summary — almost done…'}
+            </p>
+          </div>
+        )}
 
         {/* Back button */}
         <button
@@ -474,7 +522,7 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
                     />
                     <button onClick={handleGenerateSummary} disabled={generatingSummary}
                       style={{ marginTop: 4, background: 'none', border: 'none', fontSize: 10, color: '#C8102E', cursor: generatingSummary ? 'wait' : 'pointer', fontFamily: 'inherit', padding: 0 }}>
-                      {generatingSummary ? '⏳ Generating…' : '↺ Regenerate from PDF'}
+                      {processingStep === 'extracting' ? '⏳ Extracting document…' : processingStep === 'summarizing' ? '⏳ Generating summary…' : generatingSummary ? '⏳ Processing…' : '↺ Regenerate from PDF'}
                     </button>
                     {summaryError && (
                       <p style={{ fontSize: 10, color: '#C8102E', marginTop: 4, fontFamily: 'inherit' }}>{summaryError}</p>

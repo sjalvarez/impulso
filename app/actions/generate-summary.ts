@@ -10,11 +10,30 @@ function extractJson(raw: string): string {
   return raw.trim();
 }
 
-function claudeDoc(pdfBase64: string) {
-  return {
-    type: 'document' as const,
-    source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: pdfBase64 },
-  };
+async function extractTextFromPdf(pdfUrl: string): Promise<string> {
+  const res = await fetch('https://api.pdf.co/v1/pdf/convert/to/text', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.PDFCO_API_KEY!,
+    },
+    body: JSON.stringify({
+      url: pdfUrl,
+      inline: true,
+      pages: '0-',
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`PDF.co error ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+
+  const data = await res.json() as { body?: string; error?: boolean; message?: string };
+  if (data.error || !data.body) {
+    throw new Error(`PDF.co extraction failed: ${data.message ?? 'empty response'}`);
+  }
+
+  return data.body.trim();
 }
 
 export async function generateCampaignSummary(campaignId: string, locale = 'en'): Promise<{
@@ -29,7 +48,7 @@ export async function generateCampaignSummary(campaignId: string, locale = 'en')
 
   const { data: campaign, error: campError } = await sb
     .from('campaigns')
-    .select('campaign_platform_url, candidate_name, chatbot_context')
+    .select('campaign_platform_url, candidate_name, chatbot_context, platform_text')
     .eq('id', campaignId)
     .single();
 
@@ -44,7 +63,7 @@ export async function generateCampaignSummary(campaignId: string, locale = 'en')
     ? 'Respond in Spanish.'
     : 'Respond in English, regardless of the language of the document.';
 
-  const headers = {
+  const claudeHeaders = {
     'Content-Type': 'application/json',
     'x-api-key': process.env.ANTHROPIC_API_KEY!,
     'anthropic-version': '2023-06-01',
@@ -69,21 +88,30 @@ Format:
   ]
 }`;
 
-  const existingContext = campaign.chatbot_context as string | null;
+  const chatbotSystem = `You are a campaign analyst. Read the full campaign platform text and produce an exhaustive reference that a chatbot will use to answer ANY question a donor or voter might ask. ${langInstruction}
 
-  // ── Fast path: chatbot_context already exists — skip PDF, just regenerate display summary ──
+Cover EVERYTHING in the document in exhaustive detail:
+- Candidate biography, background, professional experience, and political history
+- Overall vision, mission, and governing philosophy
+- EVERY policy area with full specifics: economy, employment, education, healthcare, security, infrastructure, environment, housing, agriculture, tourism, digital transformation, youth, women, diaspora, and any others mentioned
+- All specific numbers, percentages, budget figures, targets, timelines, and measurable commitments
+- Party affiliation, coalition partners, and political positioning
+- Stance on key national issues
+- Any campaign promises, slogans, or key messages
+
+Be exhaustive — a donor asking about any specific topic (healthcare costs, teacher salaries, crime statistics, housing prices) should get a detailed answer from this reference. This is the chatbot's only knowledge source. Do not invent anything not in the document. Write in clear prose organized by topic. Aim for 4000-5000 words.`;
+
+  // ── Fast path: chatbot_context exists — regenerate display summary only ────────
+  const existingContext = campaign.chatbot_context as string | null;
   if (existingContext) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers,
+      headers: claudeHeaders,
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 1200,
         system: summarySystem,
-        messages: [{
-          role: 'user',
-          content: `Candidate: ${campaign.candidate_name}\n\nCampaign platform:\n\n${existingContext}\n\nGenerate the campaign summary.`,
-        }],
+        messages: [{ role: 'user', content: `Candidate: ${campaign.candidate_name}\n\nCampaign platform:\n\n${existingContext}\n\nGenerate the campaign summary.` }],
       }),
     });
 
@@ -104,36 +132,32 @@ Format:
     return summary;
   }
 
-  // ── Slow path: no context yet — fetch PDF and run both calls in parallel ──────
-  let pdfBase64: string;
-  try {
-    const pdfRes = await fetch(campaign.campaign_platform_url!);
-    if (!pdfRes.ok) throw new Error(`HTTP ${pdfRes.status}`);
-    const arrayBuffer = await pdfRes.arrayBuffer();
-    pdfBase64 = Buffer.from(arrayBuffer).toString('base64');
-  } catch (e) {
-    return { intro: '', proposals: [], _error: `PDF fetch failed: ${e instanceof Error ? e.message : String(e)}` };
+  // ── Slow path: extract text via PDF.co, then generate both context + summary ───
+
+  // Use stored platform_text if available, otherwise extract fresh from PDF.co
+  let platformText = campaign.platform_text as string | null;
+  if (!platformText) {
+    try {
+      platformText = await extractTextFromPdf(campaign.campaign_platform_url);
+      await sb.from('campaigns').update({ platform_text: platformText }).eq('id', campaignId);
+    } catch (e) {
+      return { intro: '', proposals: [], _error: `${e instanceof Error ? e.message : String(e)}` };
+    }
   }
 
-  const chatbotSystem = `You are a campaign analyst. Read the full campaign platform document and produce an exhaustive reference that a chatbot will use to answer ANY question a donor or voter might ask. ${langInstruction}
+  if (!platformText || platformText.length < 50) {
+    return { intro: '', proposals: [], _error: 'PDF has no readable text. Make sure it is not a scanned image.' };
+  }
 
-Cover EVERYTHING in the document in detail:
-- Candidate biography, background, professional experience, and political history
-- Overall vision, mission, and governing philosophy
-- EVERY policy area with specifics: economy, employment, education, healthcare, security, infrastructure, environment, housing, agriculture, tourism, digital transformation, youth, women, diaspora, and any others mentioned
-- All specific numbers, percentages, budget figures, targets, timelines, and measurable commitments
-- Party affiliation, coalition partners, and political positioning
-- Stance on key national issues
-- Any campaign promises, slogans, or key messages
-
-Be exhaustive — include every detail from the document. This is the chatbot's only knowledge source, so missing information means the chatbot cannot answer that question. Do not invent anything not explicitly in the document. Write in clear prose organized by topic. Aim for 1000-2000 words.`;
-
-  // ── Step 1: Generate chatbot context from PDF (the heavy call) ───────────────
+  // ── Step 1: Generate comprehensive chatbot context from plain text ─────────────
   const chatbotRes = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST', headers,
+    method: 'POST',
+    headers: claudeHeaders,
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6', max_tokens: 4000, system: chatbotSystem,
-      messages: [{ role: 'user', content: [claudeDoc(pdfBase64), { type: 'text', text: 'Generate the comprehensive chatbot reference from this document.' }] }],
+      model: 'claude-sonnet-4-6',
+      max_tokens: 14000,
+      system: chatbotSystem,
+      messages: [{ role: 'user', content: `Candidate: ${campaign.candidate_name}\n\nCampaign platform text:\n\n${platformText}\n\nGenerate the comprehensive chatbot reference.` }],
     }),
   });
 
@@ -146,14 +170,16 @@ Be exhaustive — include every detail from the document. This is the chatbot's 
   const chatbotContext = chatbotData.content[0]?.type === 'text' ? chatbotData.content[0].text : null;
   if (!chatbotContext) return { intro: '', proposals: [], _error: 'Claude returned empty chatbot context' };
 
-  // Store chatbot context immediately so it's available even if summary step fails
   await sb.from('campaigns').update({ chatbot_context: chatbotContext }).eq('id', campaignId);
 
-  // ── Step 2: Generate display summary from the extracted TEXT (no PDF re-upload) ─
+  // ── Step 2: Generate display summary from chatbot context (no PDF re-upload) ───
   const summaryRes = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST', headers,
+    method: 'POST',
+    headers: claudeHeaders,
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6', max_tokens: 1200, system: summarySystem,
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1200,
+      system: summarySystem,
       messages: [{ role: 'user', content: `Candidate: ${campaign.candidate_name}\n\nCampaign platform:\n\n${chatbotContext}\n\nGenerate the campaign summary.` }],
     }),
   });
