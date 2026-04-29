@@ -13,7 +13,7 @@ const MOVIMIENTOS = JCE_PARTIES.filter((p) => p.type === 'movimiento');
 function PartyLogo({ id, abbr, size }: { id: string; abbr: string; size: number }) {
   const [err, setErr] = useState(false);
   if (err) return <div style={{ width: size, height: size, background: '#F6F6F4', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 700, color: '#2B2F36', flexShrink: 0 }}>{abbr.slice(0, 3)}</div>;
-  return <Image src={`/images/parties/${id}.png`} alt={abbr} width={size} height={size} style={{ objectFit: 'contain', flexShrink: 0 }} onError={() => setErr(true)} />;
+  return <Image src={`/images/party_logos/${id}.png`} alt={abbr} width={size} height={size} style={{ objectFit: 'contain', flexShrink: 0 }} onError={() => setErr(true)} />;
 }
 
 interface Props {

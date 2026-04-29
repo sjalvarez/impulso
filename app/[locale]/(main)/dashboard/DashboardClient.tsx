@@ -94,11 +94,10 @@ function PartyCell({ partyId }: { partyId?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       {!imgErr ? (
-        <Image src={`/images/parties/${party.id}.png`} alt={party.abbr} width={20} height={20} style={{ objectFit: 'contain' }} onError={() => setImgErr(true)} />
+        <Image src={`/images/party_logos/${party.id}.png`} alt={party.abbr} width={20} height={20} style={{ objectFit: 'contain' }} onError={() => setImgErr(true)} />
       ) : (
-        <div style={{ width: 20, height: 20, background: '#F6F6F4', borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 700, color: '#2B2F36' }}>{party.abbr.slice(0, 3)}</div>
+        <span style={{ fontSize: '9px', fontWeight: 600, background: '#F6F6F4', border: '0.5px solid #E8E8E5', borderRadius: 3, padding: '1px 5px', color: '#767676' }}>{party.abbr}</span>
       )}
-      <span style={{ fontSize: '9px', fontWeight: 600, background: '#F6F6F4', border: '0.5px solid #E8E8E5', borderRadius: 3, padding: '1px 5px', color: '#767676' }}>{party.abbr}</span>
       <span style={{ fontSize: '13px', fontWeight: 500, color: '#2B2F36' }}>{party.name}</span>
     </div>
   );

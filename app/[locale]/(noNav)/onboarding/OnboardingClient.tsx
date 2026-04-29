@@ -93,7 +93,7 @@ function PartyLogoInline({ id, abbr }: { id: string; abbr: string }) {
   );
   return (
     <img
-      src={`/images/parties/${id}.png`}
+      src={`/images/party_logos/${id}.png`}
       alt={abbr}
       width={20}
       height={20}
