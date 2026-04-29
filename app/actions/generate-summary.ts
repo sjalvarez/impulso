@@ -10,6 +10,13 @@ function extractJson(raw: string): string {
   return raw.trim();
 }
 
+function claudeDoc(pdfBase64: string) {
+  return {
+    type: 'document' as const,
+    source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: pdfBase64 },
+  };
+}
+
 export async function generateCampaignSummary(campaignId: string, locale = 'en'): Promise<{
   intro: string;
   proposals: { title: string; description: string }[];
@@ -48,7 +55,14 @@ export async function generateCampaignSummary(campaignId: string, locale = 'en')
     ? 'Respond in Spanish.'
     : 'Respond in English, regardless of the language of the document.';
 
-  const system = `You are a campaign assistant. Based ONLY on the campaign platform document provided, generate a very concise summary. ${langInstruction}
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-api-key': process.env.ANTHROPIC_API_KEY!,
+    'anthropic-version': '2023-06-01',
+  };
+
+  // ── Call 1: Short display summary for donation page ──────────────────────────
+  const summarySystem = `You are a campaign assistant. Based ONLY on the campaign platform document provided, generate a very concise summary. ${langInstruction}
 
 Strict rules:
 - Intro: exactly 2 sentences, maximum 30 words total, maximum 160 characters.
@@ -67,37 +81,62 @@ Format:
   ]
 }`;
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY!,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1200,
-      system,
-      messages: [{
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 },
-          },
-          { type: 'text', text: 'Generate the campaign summary from this document.' },
-        ],
-      }],
-    }),
-  });
+  // ── Call 2: Comprehensive chatbot context ─────────────────────────────────────
+  const chatbotSystem = `You are a campaign analyst. Read the full campaign platform document and produce a comprehensive reference that a chatbot can use to answer any question a donor might ask. ${langInstruction}
 
-  if (!res.ok) {
-    const err = await res.text();
-    return { intro: '', proposals: [], _error: `Anthropic error ${res.status}: ${err.slice(0, 200)}` };
+Cover ALL of the following that appear in the document:
+- Candidate background, biography, and experience
+- Overall campaign vision and mission
+- Every policy area and proposal (economy, education, health, security, infrastructure, environment, etc.)
+- Specific numbers, targets, timelines, and commitments
+- Party affiliation and political positioning
+- Any other information relevant to a donor or voter
+
+Write in clear prose, organized by topic. Be thorough — this is the chatbot's only reference. Do not invent anything not in the document. Aim for 400-800 words.`;
+
+  // Run both calls in parallel
+  const [summaryRes, chatbotRes] = await Promise.all([
+    fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1200,
+        system: summarySystem,
+        messages: [{
+          role: 'user',
+          content: [
+            claudeDoc(pdfBase64),
+            { type: 'text', text: 'Generate the campaign summary from this document.' },
+          ],
+        }],
+      }),
+    }),
+    fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2000,
+        system: chatbotSystem,
+        messages: [{
+          role: 'user',
+          content: [
+            claudeDoc(pdfBase64),
+            { type: 'text', text: 'Generate the comprehensive chatbot reference from this document.' },
+          ],
+        }],
+      }),
+    }),
+  ]);
+
+  if (!summaryRes.ok) {
+    const err = await summaryRes.text();
+    return { intro: '', proposals: [], _error: `Anthropic error ${summaryRes.status}: ${err.slice(0, 200)}` };
   }
 
-  const data = await res.json() as { content: Array<{ type: string; text: string }> };
-  const raw = data.content[0]?.type === 'text' ? data.content[0].text : '';
+  const summaryData = await summaryRes.json() as { content: Array<{ type: string; text: string }> };
+  const raw = summaryData.content[0]?.type === 'text' ? summaryData.content[0].text : '';
   if (!raw) return { intro: '', proposals: [], _error: 'Claude returned empty response' };
 
   let summary = null;
@@ -107,6 +146,17 @@ Format:
     return { intro: '', proposals: [], _error: `JSON parse failed. Claude returned: ${raw.slice(0, 200)}` };
   }
 
-  await sb.from('campaigns').update({ ai_summary: summary }).eq('id', campaignId);
+  // Store chatbot context if the second call succeeded (non-blocking — don't fail summary on this)
+  let chatbotContext: string | null = null;
+  if (chatbotRes.ok) {
+    const chatbotData = await chatbotRes.json() as { content: Array<{ type: string; text: string }> };
+    chatbotContext = chatbotData.content[0]?.type === 'text' ? chatbotData.content[0].text : null;
+  }
+
+  await sb.from('campaigns').update({
+    ai_summary: summary,
+    ...(chatbotContext ? { chatbot_context: chatbotContext } : {}),
+  }).eq('id', campaignId);
+
   return summary;
 }

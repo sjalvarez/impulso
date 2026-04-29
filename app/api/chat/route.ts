@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
   const { data: campaign } = await sb
     .from('campaigns')
-    .select('candidate_name, whatsapp, race_type, party_affiliation, ai_summary, proposal_overrides, platform_text')
+    .select('candidate_name, whatsapp, race_type, party_affiliation, ai_summary, proposal_overrides, chatbot_context')
     .eq('id', campaignId)
     .single();
 
@@ -28,19 +28,18 @@ export async function POST(request: NextRequest) {
 
   const systemPrompt = `You are a helpful campaign assistant for ${campaign.candidate_name}. Answer questions about their campaign using ONLY the information provided. Keep answers concise (2-4 sentences). ${contactLine} Do not invent anything. ${langInstruction}`;
 
-  // Build context — prefer full platform_text (set after PDF summary generation) for richer answers,
-  // fall back to ai_summary bullets if platform_text not yet available
+  // Build context — prefer comprehensive chatbot_context (generated alongside ai_summary),
+  // fall back to ai_summary bullets if not yet generated
   const summary = campaign.ai_summary as { intro?: string; proposals?: { title: string; description: string }[] } | null;
   const proposals = (campaign.proposal_overrides as { title: string; description: string }[] | null) ?? summary?.proposals;
-  const platformText = campaign.platform_text as string | null;
+  const chatbotContext = campaign.chatbot_context as string | null;
 
   let ctx = `Candidate: ${campaign.candidate_name}\nRunning for: ${campaign.race_type ?? 'office'}\nParty: ${campaign.party_affiliation ?? 'unknown'}\n`;
 
-  if (platformText) {
-    // Full platform text available — use it for the most accurate answers
-    ctx += `\nFull campaign platform:\n${platformText}\n`;
+  if (chatbotContext) {
+    ctx += `\nCampaign platform (comprehensive):\n${chatbotContext}\n`;
   } else {
-    // Fall back to summary bullets
+    // Fall back to summary bullets until chatbot_context is generated
     if (summary?.intro) ctx += `\nCampaign intro: ${summary.intro}\n`;
     if (proposals?.length) {
       ctx += '\nKey proposals:\n';
