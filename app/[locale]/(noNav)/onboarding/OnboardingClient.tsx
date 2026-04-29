@@ -165,6 +165,22 @@ function FileDropArea({
     onFile(file);
   }
 
+  if (uploaded && fileName && !uploading) {
+    return (
+      <div style={{ border: '1px solid #E8E8E5', borderRadius: '8px', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F6F6F4' }}>
+        <span style={{ fontSize: '13px', color: '#16A34A', fontWeight: 500 }}>✓ {fileName}</span>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
+          style={{ fontSize: '11px', color: '#C8102E', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, padding: 0 }}
+        >
+          Change
+        </button>
+        <input ref={inputRef} type="file" accept={accept} style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) { e.target.value = ''; handle(f); } }} />
+      </div>
+    );
+  }
+
   return (
     <div
       onClick={() => inputRef.current?.click()}
@@ -179,15 +195,13 @@ function FileDropArea({
     >
       {uploading ? (
         <p style={{ fontSize: '13px', color: '#767676', margin: 0 }}>Uploading...</p>
-      ) : uploaded && fileName ? (
-        <p style={{ fontSize: '13px', color: '#16A34A', margin: 0 }}>✓ {fileName}</p>
       ) : (
         <>
           <p style={{ fontSize: '13px', color: '#767676', margin: 0 }}>{dragText}</p>
           <p style={{ fontSize: '11px', color: '#767676', margin: '4px 0 0 0' }}>{maxSizeLabel}</p>
         </>
       )}
-      <input ref={inputRef} type="file" accept={accept} style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handle(f); }} />
+      <input ref={inputRef} type="file" accept={accept} style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) { e.target.value = ''; handle(f); } }} />
     </div>
   );
 }
