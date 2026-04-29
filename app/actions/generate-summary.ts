@@ -1,6 +1,8 @@
 'use server';
 import { createClient } from '@supabase/supabase-js';
 
+const MAX_TEXT_CHARS = 15_000; // ~4k tokens — enough for any platform document
+
 function extractJson(raw: string): string {
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced) return fenced[1].trim();
@@ -8,6 +10,15 @@ function extractJson(raw: string): string {
   const end = raw.lastIndexOf('}');
   if (start !== -1 && end !== -1 && end > start) return raw.slice(start, end + 1);
   return raw.trim();
+}
+
+async function pdfToText(arrayBuffer: ArrayBuffer): Promise<string> {
+  // Use Function() to hide ESM-only unpdf from Turbopack static analysis
+  const mod = await (Function('return import("unpdf")')() as Promise<{
+    extractText: (src: Uint8Array, opts?: { mergePages?: boolean }) => Promise<{ text: string }>;
+  }>);
+  const { text } = await mod.extractText(new Uint8Array(arrayBuffer), { mergePages: true });
+  return text.trim().slice(0, MAX_TEXT_CHARS);
 }
 
 export async function generateCampaignSummary(campaignId: string, locale = 'en'): Promise<{
@@ -33,26 +44,36 @@ export async function generateCampaignSummary(campaignId: string, locale = 'en')
     return { intro: '', proposals: [], _error: 'No PDF uploaded for this campaign' };
   }
 
-  // Fetch PDF — cap at 80KB to stay well within Claude's token limits
-  let pdfBase64: string;
+  // Fetch full PDF (no slicing — slicing corrupts the PDF structure)
+  let arrayBuffer: ArrayBuffer;
   try {
     const pdfRes = await fetch(campaign.campaign_platform_url);
-    if (!pdfRes.ok) throw new Error(`PDF fetch ${pdfRes.status}`);
-    const arrayBuffer = await pdfRes.arrayBuffer();
-    const MAX_BYTES = 80 * 1024; // 80KB → ~110KB base64 → ~20k tokens max
-    const slice = arrayBuffer.byteLength > MAX_BYTES
-      ? arrayBuffer.slice(0, MAX_BYTES)
-      : arrayBuffer;
-    pdfBase64 = Buffer.from(slice).toString('base64');
+    if (!pdfRes.ok) throw new Error(`HTTP ${pdfRes.status}`);
+    arrayBuffer = await pdfRes.arrayBuffer();
   } catch (e) {
     return { intro: '', proposals: [], _error: `PDF fetch failed: ${e instanceof Error ? e.message : String(e)}` };
   }
+
+  // Extract plain text — avoids sending binary PDF to Claude entirely
+  let platformText: string;
+  try {
+    platformText = await pdfToText(arrayBuffer);
+  } catch (e) {
+    return { intro: '', proposals: [], _error: `Could not read PDF text: ${e instanceof Error ? e.message : String(e)}` };
+  }
+
+  if (!platformText || platformText.length < 50) {
+    return { intro: '', proposals: [], _error: 'PDF has no readable text. Make sure it is not a scanned image.' };
+  }
+
+  // Store extracted text so chatbot can use the full platform for richer answers
+  await sb.from('campaigns').update({ platform_text: platformText }).eq('id', campaignId);
 
   const langInstruction = locale === 'es'
     ? 'Respond in Spanish.'
     : 'Respond in English, regardless of the language of the document.';
 
-  const system = `You are a campaign assistant. Based ONLY on the campaign platform document provided, generate a very concise summary. ${langInstruction}
+  const system = `You are a campaign assistant. Based ONLY on the campaign platform text provided, generate a very concise summary. ${langInstruction}
 
 Strict rules:
 - Intro: exactly 2 sentences, maximum 30 words total, maximum 160 characters.
@@ -84,13 +105,7 @@ Format:
       system,
       messages: [{
         role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 },
-          },
-          { type: 'text', text: 'Generate the campaign summary from this document.' },
-        ],
+        content: `Candidate: ${campaign.candidate_name}\n\nCampaign platform:\n\n${platformText}\n\nGenerate the campaign summary.`,
       }],
     }),
   });
