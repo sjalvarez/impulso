@@ -47,6 +47,8 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
   const [toast, setToast] = useState(false);
   const [summaryError, setSummaryError] = useState('');
   const [generatingSummary, setGeneratingSummary] = useState(false);
+  const [regenerateSuccess, setRegenerateSuccess] = useState(false);
+  const [regenTooltip, setRegenTooltip] = useState(false);
   const [processingStep, setProcessingStep] = useState<'extracting' | 'summarizing' | null>(
     campaign.processing_status === 'extracting' ? 'extracting'
     : campaign.processing_status === 'summarizing' ? 'summarizing'
@@ -170,6 +172,7 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
     processingRef.current = false;
     abortControllerRef.current = null;
     setIframeKey(k => k + 1);
+    return true;
   }
 
   // Auto-process if PDF exists but no chatbot_context yet (first time or after new PDF)
@@ -246,7 +249,11 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
   }
 
   async function handleGenerateSummary() {
-    await runProcessPlatform(campaign.id);
+    const ok = await runProcessPlatform(campaign.id);
+    if (ok) {
+      setRegenerateSuccess(true);
+      setTimeout(() => setRegenerateSuccess(false), 2000);
+    }
   }
 
   async function handlePdfUpload(file: File) {
@@ -319,6 +326,8 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
         @media (max-width: 768px) {
           .preview-layout { grid-template-columns: 1fr !important; }
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spin { animation: spin 0.7s linear infinite; display: inline-block; }
       `}</style>
 
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 24px', fontFamily: "'Sora', sans-serif" }}>
@@ -560,16 +569,6 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
                       onChange={e => setIntroText(e.target.value)}
                       style={{ width: '100%', border: '0.5px solid #E8E8E5', borderRadius: 6, padding: '8px 10px', fontSize: 11, fontFamily: 'inherit', minHeight: 64, lineHeight: 1.6, resize: 'vertical', boxSizing: 'border-box', outline: 'none' }}
                     />
-                    <button onClick={handleGenerateSummary} disabled={generatingSummary}
-                      style={{ marginTop: 4, background: 'none', border: 'none', fontSize: 10, color: '#C8102E', cursor: generatingSummary ? 'wait' : 'pointer', fontFamily: 'inherit', padding: 0 }}>
-                      {processingStep === 'extracting' ? '⏳ Extracting document…' : processingStep === 'summarizing' ? '⏳ Generating summary…' : generatingSummary ? '⏳ Processing…' : '↺ Regenerate from PDF'}
-                    </button>
-                    {summaryError && (
-                      <p style={{ fontSize: 10, color: '#C8102E', marginTop: 4, fontFamily: 'inherit' }}>{summaryError}</p>
-                    )}
-                    {!campaign.campaign_platform_url && !pdfUrl && (
-                      <p style={{ fontSize: 10, color: '#767676', marginTop: 4, fontFamily: 'inherit' }}>Upload a PDF below first.</p>
-                    )}
                   </div>
 
                   {/* Proposals */}
@@ -600,14 +599,6 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
                     </div>
                   </div>
 
-                  {/* Save content */}
-                  <div>
-                    <button onClick={handleSaveContent} disabled={savingContent}
-                      style={{ width: '100%', height: 36, background: '#2B2F36', color: 'white', border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
-                      {savingContent ? 'Saving…' : 'Save content'}
-                    </button>
-                  </div>
-
                   {/* PDF */}
                   <div>
                     <span style={sectionLabel}>Campaign platform PDF</span>
@@ -618,7 +609,7 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
                         <span style={{ background: '#DCFCE7', color: '#166534', fontSize: 9, fontWeight: 600, borderRadius: 10, padding: '2px 6px' }}>Active</span>
                       </div>
                     )}
-                    <label style={{ display: 'block', border: '1.5px dashed #E8E8E5', borderRadius: 6, padding: 12, textAlign: 'center', cursor: 'pointer' }}>
+                    <label style={{ display: 'block', border: '1.5px dashed #E8E8E5', borderRadius: 6, padding: 12, textAlign: 'center', cursor: 'pointer', marginBottom: 8 }}>
                       <p style={{ fontSize: 11, fontWeight: 500, color: '#C8102E', margin: '0 0 2px', fontFamily: 'inherit' }}>
                         {pdfUploading ? 'Uploading…' : 'Upload new PDF'}
                       </p>
@@ -626,6 +617,42 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
                       <p style={{ fontSize: 9, color: '#767676', margin: 0, fontFamily: 'inherit' }}>Replacing this will regenerate the AI summary and chatbot</p>
                       <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handlePdfUpload(f); }} />
                     </label>
+
+                    {/* Regenerate button */}
+                    <div style={{ position: 'relative' }}
+                      onMouseEnter={() => setRegenTooltip(true)}
+                      onMouseLeave={() => setRegenTooltip(false)}
+                    >
+                      {regenTooltip && !generatingSummary && (
+                        <div style={{ position: 'absolute', bottom: 'calc(100% + 8px)', left: 0, right: 0, background: '#2B2F36', color: 'white', borderRadius: 6, padding: '8px 10px', fontSize: 10, lineHeight: 1.5, zIndex: 20, pointerEvents: 'none' }}>
+                          <p style={{ margin: '0 0 3px', fontWeight: 600, fontFamily: 'inherit' }}>Regenerate summary &amp; chatbot</p>
+                          <p style={{ margin: 0, color: '#C8C8C8', fontFamily: 'inherit' }}>Generates a new intro text and top proposals directly from your uploaded PDF. Also retrains the chatbot — so voters get up-to-date answers about your platform.</p>
+                          <div style={{ position: 'absolute', bottom: -5, left: 16, width: 10, height: 10, background: '#2B2F36', transform: 'rotate(45deg)' }} />
+                        </div>
+                      )}
+                      <button
+                        onClick={handleGenerateSummary}
+                        disabled={generatingSummary || !pdfUrl}
+                        style={{ width: '100%', height: 34, background: '#F6F6F4', border: '0.5px solid #E8E8E5', borderRadius: 4, fontSize: 11, fontWeight: 500, color: regenerateSuccess ? '#166534' : '#2B2F36', cursor: generatingSummary || !pdfUrl ? 'not-allowed' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: generatingSummary ? 0.6 : 1, transition: 'opacity 0.15s' }}
+                      >
+                        <svg className={generatingSummary ? 'spin' : ''} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                        {regenerateSuccess ? 'Regenerated!' : processingStep === 'extracting' ? 'Extracting document…' : processingStep === 'summarizing' ? 'Generating summary…' : generatingSummary ? 'Regenerating…' : 'Regenerate from PDF'}
+                      </button>
+                      {summaryError && (
+                        <p style={{ fontSize: 10, color: '#C8102E', marginTop: 4, fontFamily: 'inherit' }}>{summaryError}</p>
+                      )}
+                      {!pdfUrl && (
+                        <p style={{ fontSize: 10, color: '#767676', marginTop: 4, fontFamily: 'inherit' }}>Upload a PDF above first.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Save content */}
+                  <div>
+                    <button onClick={handleSaveContent} disabled={savingContent}
+                      style={{ width: '100%', height: 36, background: '#2B2F36', color: 'white', border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      {savingContent ? 'Saving…' : 'Save content'}
+                    </button>
                   </div>
                 </>
               )}
