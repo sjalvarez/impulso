@@ -82,15 +82,32 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
   // Toggle error
   const [toggleError, setToggleError] = useState('');
 
+  // Ref to hold the AbortController for the active processing request
+  const abortControllerRef = useRef<AbortController | null>(null);
+  // Ref to prevent concurrent calls (auto-trigger + manual)
+  const processingRef = useRef(false);
+
   async function getAuthToken(): Promise<string | null> {
     const sb = createBrowserSupabaseClient();
     const { data } = await sb.auth.getSession();
     return data.session?.access_token ?? null;
   }
 
+  function cancelProcessing() {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    processingRef.current = false;
+    setProcessingStep(null);
+    setGeneratingSummary(false);
+    setSummaryError('');
+  }
+
   async function runProcessPlatform(campaignId: string, opts?: { clearFirst?: boolean }) {
+    if (processingRef.current) return; // prevent concurrent calls
+    processingRef.current = true;
+
     const token = await getAuthToken();
-    if (!token) { setSummaryError('Not authenticated'); return; }
+    if (!token) { setSummaryError('Not authenticated'); processingRef.current = false; return; }
 
     if (opts?.clearFirst) {
       const sb = createBrowserSupabaseClient();
@@ -100,11 +117,20 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
     setSummaryError('');
     setGeneratingSummary(true);
 
-    async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number) {
-      const controller = new AbortController();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    async function fetchStep(body: object, timeoutMs: number): Promise<Response | null> {
       const id = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        return await fetch(url, { ...options, signal: controller.signal });
+        return await fetch('/api/process-platform', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } catch {
+        return null;
       } finally {
         clearTimeout(id);
       }
@@ -112,48 +138,28 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
 
     // Step 1: extract
     setProcessingStep('extracting');
-    let extractRes: Response;
-    try {
-      extractRes = await fetchWithTimeout('/api/process-platform', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ step: 'extract', campaignId, locale }),
-      }, 58_000);
-    } catch {
-      setSummaryError('Extraction timed out — PDF may be too large or PDF.co is slow. Try again.');
-      setProcessingStep(null);
-      setGeneratingSummary(false);
-      return;
+    const extractRes = await fetchStep({ step: 'extract', campaignId, locale }, 58_000);
+    if (!extractRes) {
+      if (!controller.signal.aborted) setSummaryError('Extraction timed out — try again.');
+      setProcessingStep(null); setGeneratingSummary(false); processingRef.current = false; return;
     }
     if (!extractRes.ok) {
       const err = await extractRes.json().catch(() => ({ error: 'Unknown error' }));
       setSummaryError(err.error ?? 'Extraction failed');
-      setProcessingStep(null);
-      setGeneratingSummary(false);
-      return;
+      setProcessingStep(null); setGeneratingSummary(false); processingRef.current = false; return;
     }
 
     // Step 2: summarize
     setProcessingStep('summarizing');
-    let summarizeRes: Response;
-    try {
-      summarizeRes = await fetchWithTimeout('/api/process-platform', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ step: 'summarize', campaignId, locale }),
-      }, 58_000);
-    } catch {
-      setSummaryError('Summary generation timed out. Try again — it will resume from where it left off.');
-      setProcessingStep(null);
-      setGeneratingSummary(false);
-      return;
+    const summarizeRes = await fetchStep({ step: 'summarize', campaignId, locale }, 58_000);
+    if (!summarizeRes) {
+      if (!controller.signal.aborted) setSummaryError('Summary timed out — try again.');
+      setProcessingStep(null); setGeneratingSummary(false); processingRef.current = false; return;
     }
     if (!summarizeRes.ok) {
       const err = await summarizeRes.json().catch(() => ({ error: 'Unknown error' }));
       setSummaryError(err.error ?? 'Summary generation failed');
-      setProcessingStep(null);
-      setGeneratingSummary(false);
-      return;
+      setProcessingStep(null); setGeneratingSummary(false); processingRef.current = false; return;
     }
 
     const { summary } = await summarizeRes.json();
@@ -161,6 +167,8 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
     if (summary?.proposals) setProposals(summary.proposals);
     setProcessingStep(null);
     setGeneratingSummary(false);
+    processingRef.current = false;
+    abortControllerRef.current = null;
     setIframeKey(k => k + 1);
   }
 
@@ -319,11 +327,17 @@ export default function PreviewEditorClient({ campaign, userId, locale = 'en' }:
         {processingStep && (
           <div style={{ background: '#FFF8E7', border: '0.5px solid #F5C842', borderRadius: 8, padding: '10px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B07D00" strokeWidth="2" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-            <p style={{ margin: 0, fontSize: 12, color: '#6B4F00', fontFamily: 'inherit' }}>
+            <p style={{ margin: 0, fontSize: 12, color: '#6B4F00', fontFamily: 'inherit', flex: 1 }}>
               {processingStep === 'extracting'
                 ? 'Extracting document text — this may take up to a minute for large PDFs…'
-                : 'Generating comprehensive summary — almost done…'}
+                : 'Generating summary — this takes about 30 seconds…'}
             </p>
+            <button
+              onClick={cancelProcessing}
+              style={{ background: 'none', border: '0.5px solid #B07D00', borderRadius: 4, padding: '3px 10px', fontSize: 11, color: '#6B4F00', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
+            >
+              Cancel
+            </button>
           </div>
         )}
 

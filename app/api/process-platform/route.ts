@@ -181,7 +181,7 @@ Be exhaustive — a donor asking about any specific topic (healthcare costs, tea
       headers: claudeHeaders,
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 5000,
+        max_tokens: 3000,
         system: chatbotSystem,
         messages: [{ role: 'user', content: `Candidate: ${campaign.candidate_name}\n\nCampaign platform text:\n\n${platformText.slice(0, 120_000)}\n\nGenerate the comprehensive chatbot reference.` }],
       }),
