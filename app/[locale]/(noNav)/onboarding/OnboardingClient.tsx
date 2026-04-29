@@ -365,19 +365,9 @@ function Step2({ state, setState, userId }: { state: FormState; setState: React.
     const sb = createBrowserSupabaseClient();
     const { data: sessionData } = await sb.auth.getSession();
     if (!sessionData?.session) throw new Error('Not authenticated — please refresh and try again');
-    const token = sessionData.session.access_token;
-
-    // Explicitly pass JWT so storage respects the authenticated session
-    const { createClient } = await import('@supabase/supabase-js');
-    const authed = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    );
-
-    const { data, error } = await authed.storage.from(bucket).upload(path, file, { upsert: true });
+    const { data, error } = await sb.storage.from(bucket).upload(path, file, { upsert: true });
     if (error || !data) throw new Error(error?.message ?? 'Upload failed');
-    const { data: { publicUrl } } = authed.storage.from(bucket).getPublicUrl(data.path);
+    const { data: { publicUrl } } = sb.storage.from(bucket).getPublicUrl(data.path);
     return publicUrl;
   }
 
