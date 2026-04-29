@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 
   const langInstruction = locale === 'es' ? 'Respond in Spanish.' : 'Respond in English.';
 
-  const systemPrompt = `You are a helpful campaign assistant for ${campaign.candidate_name}. Answer questions about their campaign using ONLY the information provided. Keep answers concise (2-4 sentences). ${contactLine} Do not invent anything. ${langInstruction}`;
+  const systemPrompt = `You are a knowledgeable campaign assistant for ${campaign.candidate_name}. Answer questions about their campaign using the information provided. Give helpful, specific answers — include numbers, targets, and details from the platform when relevant. Keep answers focused (3-5 sentences max). ${contactLine} Do not invent anything not in the provided information. ${langInstruction}`;
 
   // Build context — prefer comprehensive chatbot_context (generated alongside ai_summary),
   // fall back to ai_summary bullets if not yet generated
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 300,
+      max_tokens: 600,
       system: systemPrompt,
       messages: [{ role: 'user', content: `Campaign information:\n${ctx}\n\nQuestion: ${message}` }],
     }),

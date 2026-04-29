@@ -115,17 +115,18 @@ Format:
     return { intro: '', proposals: [], _error: `PDF fetch failed: ${e instanceof Error ? e.message : String(e)}` };
   }
 
-  const chatbotSystem = `You are a campaign analyst. Read the full campaign platform document and produce a comprehensive reference that a chatbot can use to answer any question a donor might ask. ${langInstruction}
+  const chatbotSystem = `You are a campaign analyst. Read the full campaign platform document and produce an exhaustive reference that a chatbot will use to answer ANY question a donor or voter might ask. ${langInstruction}
 
-Cover ALL of the following that appear in the document:
-- Candidate background, biography, and experience
-- Overall campaign vision and mission
-- Every policy area and proposal (economy, education, health, security, infrastructure, environment, etc.)
-- Specific numbers, targets, timelines, and commitments
-- Party affiliation and political positioning
-- Any other information relevant to a donor or voter
+Cover EVERYTHING in the document in detail:
+- Candidate biography, background, professional experience, and political history
+- Overall vision, mission, and governing philosophy
+- EVERY policy area with specifics: economy, employment, education, healthcare, security, infrastructure, environment, housing, agriculture, tourism, digital transformation, youth, women, diaspora, and any others mentioned
+- All specific numbers, percentages, budget figures, targets, timelines, and measurable commitments
+- Party affiliation, coalition partners, and political positioning
+- Stance on key national issues
+- Any campaign promises, slogans, or key messages
 
-Write in clear prose, organized by topic. Be thorough — this is the chatbot's only reference. Do not invent anything not in the document. Aim for 400-800 words.`;
+Be exhaustive — include every detail from the document. This is the chatbot's only knowledge source, so missing information means the chatbot cannot answer that question. Do not invent anything not explicitly in the document. Write in clear prose organized by topic. Aim for 1000-2000 words.`;
 
   const [summaryRes, chatbotRes] = await Promise.all([
     fetch('https://api.anthropic.com/v1/messages', {
@@ -138,7 +139,7 @@ Write in clear prose, organized by topic. Be thorough — this is the chatbot's 
     fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST', headers,
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6', max_tokens: 2000, system: chatbotSystem,
+        model: 'claude-sonnet-4-6', max_tokens: 4000, system: chatbotSystem,
         messages: [{ role: 'user', content: [claudeDoc(pdfBase64), { type: 'text', text: 'Generate the comprehensive chatbot reference from this document.' }] }],
       }),
     }),
