@@ -365,10 +365,22 @@ function Step2({ state, setState, userId }: { state: FormState; setState: React.
     const sb = createBrowserSupabaseClient();
     const { data: sessionData } = await sb.auth.getSession();
     if (!sessionData?.session) throw new Error('Not authenticated — please refresh and try again');
-    const { data, error } = await sb.storage.from(bucket).upload(path, file, { upsert: true });
-    if (error || !data) throw new Error(error?.message ?? 'Upload failed');
-    const { data: { publicUrl } } = sb.storage.from(bucket).getPublicUrl(data.path);
-    return publicUrl;
+    const token = sessionData.session.access_token;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('bucket', bucket);
+    formData.append('path', path);
+
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error ?? 'Upload failed');
+    return json.url;
   }
 
   async function handlePdf(file: File) {
