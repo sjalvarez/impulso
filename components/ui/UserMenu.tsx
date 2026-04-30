@@ -10,17 +10,27 @@ interface Props {
 
 export default function UserMenu({ locale }: Props) {
   const [user, setUser] = useState<any>(null);
+  const [candidatePhoto, setCandidatePhoto] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [myCampaignHover, setMyCampaignHover] = useState(false);
   const [editCampaignHover, setEditCampaignHover] = useState(false);
+  const [avatarErr, setAvatarErr] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
 
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       setUser(user);
+      if (user) {
+        const { data } = await supabase
+          .from('campaigns')
+          .select('candidate_photo_url')
+          .eq('user_id', user.id)
+          .single();
+        if (data?.candidate_photo_url) setCandidatePhoto(data.candidate_photo_url);
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -65,9 +75,8 @@ export default function UserMenu({ locale }: Props) {
     );
   }
 
-  const initials = (
-    (user.user_metadata?.full_name ?? user.email ?? '?').charAt(0)
-  ).toUpperCase();
+  const initials = (user.user_metadata?.full_name ?? user.email ?? '?').charAt(0).toUpperCase();
+  const avatarUrl = candidatePhoto;
 
   async function handleSignOut() {
     const supabase = createBrowserSupabaseClient();
@@ -94,9 +103,16 @@ export default function UserMenu({ locale }: Props) {
           fontWeight: 600,
           fontFamily: 'inherit',
           position: 'relative',
+          overflow: 'hidden',
+          padding: 0,
         }}
       >
-        {initials}
+        {avatarUrl && !avatarErr ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatarUrl} alt={initials} width={34} height={34} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setAvatarErr(true)} />
+        ) : (
+          initials
+        )}
       </button>
 
       {open && (
