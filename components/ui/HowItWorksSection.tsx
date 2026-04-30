@@ -26,7 +26,7 @@ const steps = [
   },
 ];
 
-const PLACEHOLDER_COLORS = ['#E8F0E8', '#F0EBE8', '#EDE8F0'];
+const STEP_IMAGES = ['/images/steps/Step2.jpg', '/images/steps/Step3.jpg', '/images/steps/step4.jpg'];
 
 export default function HowItWorksSection() {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -167,8 +167,8 @@ export default function HowItWorksSection() {
             <HowItWorksLiveFeed />
           </div>
 
-          {/* Slots 1-4: placeholder divs */}
-          {PLACEHOLDER_COLORS.map((color, i) => {
+          {/* Slots 1-3: step images */}
+          {STEP_IMAGES.map((src, i) => {
             const idx = i + 1;
             return (
               <div
@@ -178,15 +178,14 @@ export default function HowItWorksSection() {
                   inset: 0,
                   opacity: activeIndex === idx ? 1 : 0,
                   transition: 'opacity 0.4s ease',
-                  background: color,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
                 }}
               >
-                <span style={{ fontSize: '14px', fontWeight: 600, color: '#767676' }}>
-                  {steps[idx].title}
-                </span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={src}
+                  alt={steps[idx].title}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }}
+                />
               </div>
             );
           })}
