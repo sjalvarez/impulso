@@ -40,7 +40,7 @@ export default function Nav({ locale }: Props) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
           {/* Nav links — hidden on mobile */}
           <div className="nav-links" style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-            <a href="#how-it-works" style={linkStyle}>{t('howItWorks')}</a>
+            <a href="/#how-it-works" style={linkStyle}>{t('howItWorks')}</a>
             <Link href="/about" style={linkStyle}>{t('about')}</Link>
           </div>
 
