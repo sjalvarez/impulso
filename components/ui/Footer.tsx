@@ -74,13 +74,18 @@ export default function Footer(p: FooterProps) {
               {p.colPlatform}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {[p.howItWorks, p.launchCampaign, p.donateToCampaign, p.about].map((link) => (
-                <a key={link} href="#" style={{
+              {[
+                { label: p.howItWorks, href: '/#how-it-works' },
+                { label: p.launchCampaign, href: '/auth/signup' },
+                { label: p.donateToCampaign, href: '/' },
+                { label: p.about, href: '/about' },
+              ].map(({ label, href }) => (
+                <a key={label} href={href} style={{
                   fontSize: '12px',
                   color: 'rgba(255,255,255,0.55)',
                   textDecoration: 'none',
                 }}>
-                  {link}
+                  {label}
                 </a>
               ))}
             </div>
