@@ -11,8 +11,8 @@ const steps = [
   },
   {
     n: 2,
-    title: 'Share your link — and start receiving',
-    desc: 'We generate a unique donation link. Share it on WhatsApp, Instagram, or email. Donate once or recurrently. We accept all major cards and tPago.',
+    title: 'Your donation page, live in seconds',
+    desc: 'We automatically generate a branded page with your graphics and platform — including an AI chatbot that answers voters\' questions about your proposals. Share the link on WhatsApp, Instagram, or email. All major cards and tPago accepted.',
   },
   {
     n: 3,
@@ -21,17 +21,12 @@ const steps = [
   },
   {
     n: 4,
-    title: 'AI-powered voter outreach',
-    desc: 'Upload your contact list. Impulso sends personalized emails and makes AI-assisted calls with messaging written by your team.',
-  },
-  {
-    n: 5,
     title: 'Bank-level security',
     desc: 'All data encrypted with AES-256 — the same standard used by banks worldwide.',
   },
 ];
 
-const PLACEHOLDER_COLORS = ['#E8F0E8', '#F0EBE8', '#EDE8F0', '#F0F0E8'];
+const PLACEHOLDER_COLORS = ['#E8F0E8', '#F0EBE8', '#EDE8F0'];
 
 export default function HowItWorksSection() {
   const [activeIndex, setActiveIndex] = useState(0);
